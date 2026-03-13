@@ -30,7 +30,7 @@ BreakBeforeTernaryOperators: 'false'                # Do not break before ternar
 BreakConstructorInitializersBeforeComma: 'true'     # Break constructor initializers before commas.
 
 # Column and line limits
-ColumnLimit: '120'                                  # Maximum column width for code.
+ColumnLimit: '160'                                  # Maximum column width for code.
 ConstructorInitializerAllOnOneLineOrOnePerLine: 'false'  # Do not force all constructor initializers on one line or one per line.
 Cpp11BracedListStyle: 'false'                        # Use C++11 braced list style.
 IndentCaseLabels: 'true'                            # Indent case labels in switch statements.
