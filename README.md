@@ -2,7 +2,25 @@
 
 This is a *very* early build.
 
-# Build & Run
+## Info
+* Forward (not Forward+, since less than 5 dynamic lights)
+* Burley + GGX 
+* Overwatch FOV (103deg)
+* Overwatch Sensitivity [arg: set sensitivity with -sense <value>]
+
+## Immediate Plans
+* Copy Overwatch movement
+* Add simple overlay (fps, crosshair, current settings)
+* Add FPS limiter (normal one + one with VK_EXT_present_timing)
+* Fullscreen / Windowed mode
+
+## Long Term Plans
+* Convert to ECS Engine
+* Turn into simple FPS Aim Trainer (Like Kovaaks)
+
+---
+
+## Build & Run
 
 ### Debug
 ```bash

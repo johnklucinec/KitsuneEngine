@@ -28,8 +28,11 @@
 #include <tiny_obj_loader.h>
 #include <source_location>
 
+#include "assets/ow_cam.hpp"
+
 // ========================================
 // Globals
+constexpr float    HFOV = 103.0f;
 constexpr uint32_t maxFramesInFlight{ 2 };
 uint32_t           imageIndex{ 0 };
 uint32_t           frameIndex{ 0 };
@@ -62,9 +65,9 @@ std::vector<VkSemaphore>                       renderSemaphores;
 std::vector<VkImage>                           swapchainImages;
 std::vector<VkImageView>                       swapchainImageViews;
 
-glm::vec3  camPos{ 0.0f, 0.0f, -6.0f };
-glm::vec3  objectRotations[3]{};
-glm::ivec2 windowSize{};
+glm::vec3      camPos{ 0.0f, 0.0f, -6.0f };
+ow_cam::Camera camera{};
+glm::ivec2     windowSize{};
 
 // ========================================
 // Structs and Buffers
@@ -141,12 +144,17 @@ int main(int argc, char* argv[])
   std::vector<VkPhysicalDevice> devices(deviceCount);
   chk(vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data()));
 
-  // Optional: select device from command line
+  // Optional: select device with positional arg; set sensitivity with -sense <value>
   uint32_t deviceIndex{ 0 };
-  if(argc > 1)
+  for(int i = 1; i < argc; i++)
   {
-    deviceIndex = std::stoi(argv[1]);
-    assert(deviceIndex < deviceCount);
+    if(std::string(argv[i]) == "-sense" && i + 1 < argc)
+      camera.sensitivity = std::stof(argv[++i]);
+    else
+    {
+      deviceIndex = static_cast<uint32_t>(std::stoi(argv[i]));
+      assert(deviceIndex < deviceCount);
+    }
   }
 
   // Output device name
@@ -235,6 +243,7 @@ int main(int argc, char* argv[])
   assert(window);
   chk(SDL_Vulkan_CreateSurface(window, instance, nullptr, &surface));  // request vulkan surface
   chk(SDL_GetWindowSize(window, &windowSize.x, &windowSize.y));
+  SDL_SetWindowRelativeMouseMode(window, true);
   VkSurfaceCapabilitiesKHR surfaceCaps{};
   chk(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(devices[deviceIndex], surface, &surfaceCaps));  // request surface properties
 
@@ -787,12 +796,18 @@ int main(int argc, char* argv[])
     chkSwapchain(vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, presentSemaphores[frameIndex], VK_NULL_HANDLE, &imageIndex));
 
     // ==== Update Shader Data ====
-    shaderData.projection = glm::perspective(glm::radians(45.0f), (float)windowSize.x / (float)windowSize.y, 0.1f, 32.0f);
-    shaderData.view       = glm::translate(glm::mat4(1.0f), camPos);
+    float vfov            = ow_cam::vfov_from_hfov_cfg(HFOV);
+    shaderData.projection = glm::perspective(vfov, (float)windowSize.x / (float)windowSize.y, 0.1f, 32.0f);
+
+    // View matrix built from OW camera yaw/pitch
+    glm::mat4 rotYaw   = glm::rotate(glm::mat4(1.0f), camera.yaw_rad, glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::mat4 rotPitch = glm::rotate(glm::mat4(1.0f), -camera.pitch_rad, glm::vec3(1.0f, 0.0f, 0.0f));
+    shaderData.view    = rotPitch * rotYaw * glm::translate(glm::mat4(1.0f), camPos);
+
     for(auto i = 0; i < 3; i++)
     {
       auto instancePos    = glm::vec3((float)(i - 1) * 3.0f, 0.0f, 0.0f);
-      shaderData.model[i] = glm::translate(glm::mat4(1.0f), instancePos) * glm::mat4_cast(glm::quat(objectRotations[i]));
+      shaderData.model[i] = glm::translate(glm::mat4(1.0f), instancePos);  // static, no rotation
     }
     memcpy(shaderDataBuffers[frameIndex].allocationInfo.pMappedData, &shaderData, sizeof(ShaderData));
 
@@ -947,47 +962,45 @@ int main(int argc, char* argv[])
     // === Polling Events ===
     float elapsedTime{ (SDL_GetTicks() - lastTime) / 1000.0f };
     lastTime = SDL_GetTicks();
+
     for(SDL_Event event; SDL_PollEvent(&event);)
     {
-      // Exit loop if the application is about to close
-      if(event.type == SDL_EVENT_QUIT)
+      switch(event.type)
       {
-        quit = true;
-        break;
+        case SDL_EVENT_QUIT:  // Exit loop if the application is about to close
+          quit = true;
+          break;
+
+        case SDL_EVENT_MOUSE_MOTION:  // OW2 camera look via raw relative mouse input
+          camera.apply_mouse_delta(event.motion.xrel, event.motion.yrel);
+          break;
+
+        case SDL_EVENT_MOUSE_WHEEL:
+          camPos.z += (float)event.wheel.y * elapsedTime * 10.0f;
+          break;
+
+        case SDL_EVENT_KEY_DOWN:
+          if(event.key.key == SDLK_ESCAPE)
+            quit = true;
+          else if(event.key.key == SDLK_A)  // Select active model instance (left)
+            shaderData.selected = (shaderData.selected > 0) ? shaderData.selected - 1 : 2;
+          else if(event.key.key == SDLK_D)  // Select active model instance (right)
+            shaderData.selected = (shaderData.selected < 2) ? shaderData.selected + 1 : 0;
+          break;
+
+        case SDL_EVENT_WINDOW_RESIZED:  // Window resize
+          updateSwapchain = true;
+          break;
+
+        default:
+          break;
       }
-
-      // Rotate the selected object with mouse drag
-      if(event.type == SDL_EVENT_MOUSE_MOTION)
-      {
-        if(event.button.button == SDL_BUTTON_LEFT)
-        {
-          objectRotations[shaderData.selected].x -= (float)event.motion.yrel * elapsedTime;
-          objectRotations[shaderData.selected].y += (float)event.motion.xrel * elapsedTime;
-        }
-      }
-
-      // Zooming with the mouse wheel
-      if(event.type == SDL_EVENT_MOUSE_WHEEL)
-        camPos.z += (float)event.wheel.y * elapsedTime * 10.0f;
-
-      // Select active model instance
-      if(event.type == SDL_EVENT_KEY_DOWN)
-      {
-        if(event.key.key == SDLK_RIGHT)
-          shaderData.selected = (shaderData.selected < 2) ? shaderData.selected + 1 : 0;
-
-        if(event.key.key == SDLK_LEFT)
-          shaderData.selected = (shaderData.selected > 0) ? shaderData.selected - 1 : 2;
-      }
-
-      // Window resize
-      if(event.type == SDL_EVENT_WINDOW_RESIZED)
-        updateSwapchain = true;
     }
 
     if(updateSwapchain)
     {
       chk(SDL_GetWindowSize(window, &windowSize.x, &windowSize.y));
+      SDL_SetWindowRelativeMouseMode(window, true);
       updateSwapchain = false;
 
       // Wait until the GPU has completed all outstanding operations
