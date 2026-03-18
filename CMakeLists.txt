@@ -4,7 +4,7 @@
 cmake_minimum_required(VERSION 3.20 FATAL_ERROR)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
 include(FetchContent)
-set(NAME HowToVulkan)
+set(NAME KitsuneEngine)
 project(${NAME})
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -15,7 +15,6 @@ else()
     message(STATUS "Found Vulkan SDK in $ENV{VULKAN_SDK}")
 endif()
 
-# These are not part of the SDK
 include_directories(external/tinyobj)
 include_directories(external/ktx/include)
 include_directories(external/ktx/other_include)
@@ -53,6 +52,27 @@ endif()
 find_library(SDL_LIBRARY NAMES SDL3 HINTS "$ENV{VULKAN_SDK}/lib" REQUIRED)
 find_library(Slang_LIBRARY NAMES slang slang-compiler HINTS "$ENV{VULKAN_SDK}/lib" REQUIRED)
 
+set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui)
+add_library(imgui STATIC
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp)
+target_include_directories(imgui PUBLIC
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+    ${Vulkan_INCLUDE_DIRS})
+target_compile_definitions(imgui PUBLIC
+    VK_NO_PROTOTYPES
+    IMGUI_IMPL_VULKAN_USE_VOLK
+    "IMGUI_IMPL_VULKAN_VOLK_FILENAME=<Volk/volk.h>")
+
+target_include_directories(imgui PRIVATE
+    ${CMAKE_SOURCE_DIR}/external
+    $ENV{VULKAN_SDK}/include/SDL3)
+
 if(WIN32)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_USE_PLATFORM_WIN32_KHR")
 elseif(LINUX)
@@ -71,7 +91,7 @@ if (WIN32)
 endif()
 set_target_properties(${NAME} PROPERTIES DEBUGGER_WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_features(${NAME} PRIVATE cxx_std_20)
-target_link_libraries(${NAME} PRIVATE Vulkan::Vulkan ${SDL_LIBRARY} ktx ${Slang_LIBRARY})
+target_link_libraries(${NAME} PRIVATE Vulkan::Vulkan ${SDL_LIBRARY} ktx ${Slang_LIBRARY} imgui)
 if (NOT WIN32)
     target_link_libraries(${NAME} PRIVATE glm::glm-header-only)
 endif()

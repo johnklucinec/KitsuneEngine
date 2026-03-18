@@ -4,6 +4,7 @@
 #define VOLK_IMPLEMENTATION
 #include <SDL3/SDL_video.h>
 #include <cassert>
+#include <chrono>
 #include <vulkan/vulkan_core.h>
 #include <vulkan/vulkan.h>
 #include <volk/volk.h>
@@ -28,12 +29,14 @@
 #include <tiny_obj_loader.h>
 #include <source_location>
 
-#include "assets/ow_cam.hpp"
+#include "systems/ow_cam.hpp"
+#include "systems/ow_move.hpp"
+#include "systems/ow_overlay.hpp"
 
 // ========================================
 // Globals
 constexpr float    HFOV = 103.0f;
-constexpr uint32_t maxFramesInFlight{ 2 };
+constexpr uint32_t maxFramesInFlight{ 2 };  // Only use one for VSYNC?
 uint32_t           imageIndex{ 0 };
 uint32_t           frameIndex{ 0 };
 
@@ -65,9 +68,13 @@ std::vector<VkSemaphore>                       renderSemaphores;
 std::vector<VkImage>                           swapchainImages;
 std::vector<VkImageView>                       swapchainImageViews;
 
-glm::vec3      camPos{ 0.0f, 0.0f, -6.0f };
-ow_cam::Camera camera{};
-glm::ivec2     windowSize{};
+bool           isSprinting = false;
+ow_cam::Camera camera{
+  .pos         = { 0.0f, 0.0f, -6.0f },
+  .sensitivity = 2.70f,
+};
+ow_move::Walker walker{};
+glm::ivec2      windowSize{};
 
 // ========================================
 // Structs and Buffers
@@ -239,7 +246,7 @@ int main(int argc, char* argv[])
 
   // ========================================
   // Window and Surface
-  SDL_Window* window = SDL_CreateWindow("How to Vulkan", 1920u, 1080u, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+  SDL_Window* window = SDL_CreateWindow("KitsuneEngine", 1920u, 1080u, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
   assert(window);
   chk(SDL_Vulkan_CreateSurface(window, instance, nullptr, &surface));  // request vulkan surface
   chk(SDL_GetWindowSize(window, &windowSize.x, &windowSize.y));
@@ -261,7 +268,7 @@ int main(int argc, char* argv[])
     .imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
     .preTransform     = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
     .compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-    .presentMode      = VK_PRESENT_MODE_FIFO_KHR,
+    .presentMode      = VK_PRESENT_MODE_FIFO_KHR, // VK_PRESENT_MODE_FIFO_KHR = VSYNC | VK_PRESENT_MODE_IMMEDIATE_KHR = Unlocked
   };
   chk(vkCreateSwapchainKHR(device, &swapchainCI, nullptr, &swapchain));
 
@@ -607,15 +614,20 @@ int main(int argc, char* argv[])
   // Allocate descriptors
   VkDescriptorPoolSize poolSize{
     .type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-    .descriptorCount = static_cast<uint32_t>(textures.size()),  // As many descriptors for images + samplers per texture
+    .descriptorCount = static_cast<uint32_t>(textures.size()) + 1,  // As many descriptors for images + samplers per texture + 1 for ImGui
   };
   VkDescriptorPoolCreateInfo descPoolCI{
     .sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-    .maxSets       = 1,  // how mant descriptor sets, not descriptors
+    .flags         = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,  // for ImGui
+    .maxSets       = 2,                                                  // how mant descriptor sets, not descriptors + 1 for ImGui
     .poolSizeCount = 1,
     .pPoolSizes    = &poolSize,  // If wrong, allocations beyound requested counts will fail
   };
   chk(vkCreateDescriptorPool(device, &descPoolCI, nullptr, &descriptorPool));
+
+  // Initialize the ImGui overlay
+  ow_overlay::init(window, instance, devices[deviceIndex], device, queue, queueFamily, static_cast<uint32_t>(swapchainImages.size()), imageFormat,
+                   descriptorPool, surfaceCaps.minImageCount);
 
   uint32_t variableDescCount{ static_cast<uint32_t>(textures.size()) };
   // Allocate descriptor sets from that pool
@@ -783,11 +795,19 @@ int main(int argc, char* argv[])
 
   // ========================================
   // Render Loop
-  uint64_t lastTime{ SDL_GetTicks() };
-  bool     quit{ false };
+  auto lastTime = std::chrono::high_resolution_clock::now();
+  bool quit{ false };
 
   while(!quit)
   {
+    auto    now       = std::chrono::high_resolution_clock::now();
+    int64_t elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(now - lastTime).count();
+    lastTime          = now;
+    float elapsedTime = static_cast<float>(elapsedUs) * 1e-6f;
+    float fps         = elapsedUs > 0 ? 1e6f / static_cast<float>(elapsedUs) : 0.0f;
+
+    ow_overlay::begin_frame();  // begin frame for ImGui
+
     // ==== Wait on Fence (sync) ====
     chk(vkWaitForFences(device, 1, &fences[frameIndex], true, UINT64_MAX));  // Wait for last frame GPU is working on
     chk(vkResetFences(device, 1, &fences[frameIndex]));                      // Reset for next submission
@@ -802,7 +822,7 @@ int main(int argc, char* argv[])
     // View matrix built from OW camera yaw/pitch
     glm::mat4 rotYaw   = glm::rotate(glm::mat4(1.0f), camera.yaw_rad, glm::vec3(0.0f, 1.0f, 0.0f));
     glm::mat4 rotPitch = glm::rotate(glm::mat4(1.0f), -camera.pitch_rad, glm::vec3(1.0f, 0.0f, 0.0f));
-    shaderData.view    = rotPitch * rotYaw * glm::translate(glm::mat4(1.0f), camPos);
+    shaderData.view    = rotPitch * rotYaw * glm::translate(glm::mat4(1.0f), camera.pos);
 
     for(auto i = 0; i < 3; i++)
     {
@@ -909,7 +929,18 @@ int main(int argc, char* argv[])
 
     // Draw mesh
     vkCmdDrawIndexed(cb, indexCount, 3, 0, 0, 0);  // commandBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstanceID
-    vkCmdEndRendering(cb);                         // Finish current render pass
+
+    // Build ImGui HUD
+    ow_overlay::FrameData fd{
+      .fps                  = fps,
+      .frames_in_flight     = maxFramesInFlight,
+      .fps_limited          = false,
+      .fullscreen_exclusive = false,
+    };
+    ow_overlay::build_ui(fd);
+    ow_overlay::record_draw(cb);
+
+    vkCmdEndRendering(cb);  // Finish current render pass
 
     // Transition swapchain image to a layout required for presentation
     VkImageMemoryBarrier2 barrierPresent{
@@ -960,35 +991,45 @@ int main(int argc, char* argv[])
     chkSwapchain(vkQueuePresentKHR(queue, &presentInfo));
 
     // === Polling Events ===
-    float elapsedTime{ (SDL_GetTicks() - lastTime) / 1000.0f };
-    lastTime = SDL_GetTicks();
+    constexpr int maxShaderIndex = 2;
+    static bool   keyState[SDL_SCANCODE_COUNT]{};
 
-    for(SDL_Event event; SDL_PollEvent(&event);)
+    SDL_Event event;
+    while(SDL_PollEvent(&event))
     {
       switch(event.type)
       {
-        case SDL_EVENT_QUIT:  // Exit loop if the application is about to close
+        case SDL_EVENT_QUIT:
           quit = true;
           break;
 
-        case SDL_EVENT_MOUSE_MOTION:  // OW2 camera look via raw relative mouse input
+        case SDL_EVENT_MOUSE_MOTION:
           camera.apply_mouse_delta(event.motion.xrel, event.motion.yrel);
           break;
 
-        case SDL_EVENT_MOUSE_WHEEL:
-          camPos.z += (float)event.wheel.y * elapsedTime * 10.0f;
-          break;
-
         case SDL_EVENT_KEY_DOWN:
-          if(event.key.key == SDLK_ESCAPE)
-            quit = true;
-          else if(event.key.key == SDLK_A)  // Select active model instance (left)
-            shaderData.selected = (shaderData.selected > 0) ? shaderData.selected - 1 : 2;
-          else if(event.key.key == SDLK_D)  // Select active model instance (right)
-            shaderData.selected = (shaderData.selected < 2) ? shaderData.selected + 1 : 0;
+          keyState[event.key.scancode] = true;
+          switch(event.key.key)
+          {
+            case SDLK_ESCAPE:
+              quit = true;
+              break;
+            case SDLK_LEFT:
+              shaderData.selected = (shaderData.selected > 0) ? shaderData.selected - 1 : maxShaderIndex;
+              break;
+            case SDLK_RIGHT:
+              shaderData.selected = (shaderData.selected < maxShaderIndex) ? shaderData.selected + 1 : 0;
+              break;
+            default:
+              break;
+          }
           break;
 
-        case SDL_EVENT_WINDOW_RESIZED:  // Window resize
+        case SDL_EVENT_KEY_UP:
+          keyState[event.key.scancode] = false;
+          break;
+
+        case SDL_EVENT_WINDOW_RESIZED:
           updateSwapchain = true;
           break;
 
@@ -996,6 +1037,20 @@ int main(int argc, char* argv[])
           break;
       }
     }
+
+    float fwd = 0.0f, side = 0.0f;
+    if(keyState[SDL_SCANCODE_W])
+      fwd += 1.0f;
+    if(keyState[SDL_SCANCODE_S])
+      fwd -= 1.0f;
+    if(keyState[SDL_SCANCODE_A])
+      side += 1.0f;
+    if(keyState[SDL_SCANCODE_D])
+      side -= 1.0f;
+    isSprinting = keyState[SDL_SCANCODE_LSHIFT];
+
+    walker.update(fwd, side, isSprinting);                                            // Update movement
+    walker.integrate_world(camera.pos.x, camera.pos.z, camera.yaw_rad, elapsedTime);  // Update velocity, then integrate
 
     if(updateSwapchain)
     {
@@ -1086,6 +1141,7 @@ int main(int argc, char* argv[])
     vmaDestroyImage(allocator, textures[i].image, textures[i].allocation);
   }
   vkDestroyDescriptorSetLayout(device, descriptorSetLayoutTex, nullptr);
+  ow_overlay::shutdown(device);  // ImGui overlay
   vkDestroyDescriptorPool(device, descriptorPool, nullptr);
   vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
   vkDestroyPipeline(device, pipeline, nullptr);

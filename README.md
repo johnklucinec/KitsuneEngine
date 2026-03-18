@@ -7,10 +7,10 @@ This is a *very* early build.
 * Burley + GGX 
 * Overwatch FOV (103deg)
 * Overwatch Sensitivity [arg: set sensitivity with -sense <value>]
+* Overwatch Movement
+* Simple overlay (fps, crosshair, current settings)
 
 ## Immediate Plans
-* Copy Overwatch movement
-* Add simple overlay (fps, crosshair, current settings)
 * Add FPS limiter (normal one + one with VK_EXT_present_timing)
 * Fullscreen / Windowed mode
 
@@ -25,13 +25,12 @@ This is a *very* early build.
 ### Debug
 ```bash
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
-cmake --build build
-build\\bin\\HowToVulkan.exe
+cmake --build build && build\\bin\\KitsuneEngine.exe
 ```
 
 ### Release
 ```bash
 cmake -B build/release -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ 
 cmake --build build/release
-build\\release\\bin\\HowToVulkan.exe
+build\\release\\bin\\KitsuneEngine.exe
 ```
