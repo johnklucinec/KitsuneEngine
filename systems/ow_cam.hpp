@@ -29,19 +29,25 @@ constexpr float vfov_from_hfov_cfg(float fov_cfg_deg) noexcept
 struct Camera
 {
   glm::vec3 pos         = { 0.0f, 0.0f, 0.0f };
-  float     yaw_rad     = 0.0f;
-  float     pitch_rad   = 0.0f;
+  double    yaw_rad     = 0.0f;
+  double    pitch_rad   = 0.0f;
   float     sensitivity = 2.70f;  // OW2 slider range (0.01–100)
 
   // Feed raw mouse delta counts each input event.
   constexpr void apply_mouse_delta(int dx, int dy) noexcept
   {
-    yaw_rad   += static_cast<float>(dx) * M_YAW   * sensitivity * DEG_TO_RAD;
-    pitch_rad += static_cast<float>(dy) * M_PITCH * sensitivity * DEG_TO_RAD;
+    constexpr double MY = M_YAW * std::numbers::pi / 180.0;
+    constexpr double MP = M_PITCH * std::numbers::pi / 180.0;
+    yaw_rad += static_cast<double>(dx) * MY * sensitivity;
+    pitch_rad += static_cast<double>(dy) * MP * sensitivity;
 
-    constexpr float PITCH_LIMIT = std::numbers::pi_v<float> * 0.499f;
-    pitch_rad = std::clamp(pitch_rad, -PITCH_LIMIT, PITCH_LIMIT);
+    constexpr double PITCH_LIMIT = std::numbers::pi * 0.499;
+    pitch_rad                    = std::clamp(pitch_rad, -PITCH_LIMIT, PITCH_LIMIT);
   }
+
+  // Call when building view matrix
+  [[nodiscard]] float yaw_f() const noexcept { return static_cast<float>(yaw_rad); }
+  [[nodiscard]] float pitch_f() const noexcept { return static_cast<float>(pitch_rad); }
 };
 
 // ========================================

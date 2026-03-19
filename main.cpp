@@ -4,7 +4,6 @@
 #define VOLK_IMPLEMENTATION
 #include <SDL3/SDL_video.h>
 #include <cassert>
-#include <chrono>
 #include <vulkan/vulkan_core.h>
 #include <vulkan/vulkan.h>
 #include <volk/volk.h>
@@ -32,11 +31,13 @@
 #include "systems/ow_cam.hpp"
 #include "systems/ow_move.hpp"
 #include "systems/ow_overlay.hpp"
+#include "systems/fps_limiter.hpp"
 
 // ========================================
 // Globals
-constexpr float    HFOV = 103.0f;
-constexpr uint32_t maxFramesInFlight{ 2 };  // Only use one for VSYNC?
+constexpr float    HFOV    = 103.0f;
+constexpr double   MAX_FPS = 480.0;
+constexpr uint32_t maxFramesInFlight{ 1 };
 uint32_t           imageIndex{ 0 };
 uint32_t           frameIndex{ 0 };
 
@@ -268,7 +269,7 @@ int main(int argc, char* argv[])
     .imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
     .preTransform     = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
     .compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-    .presentMode      = VK_PRESENT_MODE_FIFO_KHR, // VK_PRESENT_MODE_FIFO_KHR = VSYNC | VK_PRESENT_MODE_IMMEDIATE_KHR = Unlocked
+    .presentMode      = VK_PRESENT_MODE_IMMEDIATE_KHR, // VK_PRESENT_MODE_FIFO_KHR = VSYNC | VK_PRESENT_MODE_IMMEDIATE_KHR = Unlocked
   };
   chk(vkCreateSwapchainKHR(device, &swapchainCI, nullptr, &swapchain));
 
@@ -795,33 +796,94 @@ int main(int argc, char* argv[])
 
   // ========================================
   // Render Loop
-  auto lastTime = std::chrono::high_resolution_clock::now();
-  bool quit{ false };
+  fps::Limiter limiter(MAX_FPS);
+  bool         quit{ false };
 
   while(!quit)
   {
-    auto    now       = std::chrono::high_resolution_clock::now();
-    int64_t elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(now - lastTime).count();
-    lastTime          = now;
-    float elapsedTime = static_cast<float>(elapsedUs) * 1e-6f;
-    float fps         = elapsedUs > 0 ? 1e6f / static_cast<float>(elapsedUs) : 0.0f;
-
-    ow_overlay::begin_frame();  // begin frame for ImGui
-
     // ==== Wait on Fence (sync) ====
     chk(vkWaitForFences(device, 1, &fences[frameIndex], true, UINT64_MAX));  // Wait for last frame GPU is working on
     chk(vkResetFences(device, 1, &fences[frameIndex]));                      // Reset for next submission
 
+    // Setup frame pacing
+    limiter.wait();
+    float elapsedTime = limiter.deltaTime();
+    float fps         = limiter.currentFPS();
+
+    ow_overlay::begin_frame();  // begin frame for ImGui
+
     // ==== Aquire Next Image ====
     chkSwapchain(vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, presentSemaphores[frameIndex], VK_NULL_HANDLE, &imageIndex));
+
+    // === Polling Events ===
+    constexpr int maxShaderIndex = 2;
+    static bool   keyState[SDL_SCANCODE_COUNT]{};
+
+    SDL_Event event;
+    while(SDL_PollEvent(&event))
+    {
+      switch(event.type)
+      {
+        case SDL_EVENT_QUIT:
+          quit = true;
+          break;
+
+        case SDL_EVENT_MOUSE_MOTION:
+          camera.apply_mouse_delta(event.motion.xrel, event.motion.yrel);
+          break;
+
+        case SDL_EVENT_KEY_DOWN:
+          keyState[event.key.scancode] = true;
+          switch(event.key.key)
+          {
+            case SDLK_ESCAPE:
+              quit = true;
+              break;
+            case SDLK_LEFT:
+              shaderData.selected = (shaderData.selected > 0) ? shaderData.selected - 1 : maxShaderIndex;
+              break;
+            case SDLK_RIGHT:
+              shaderData.selected = (shaderData.selected < maxShaderIndex) ? shaderData.selected + 1 : 0;
+              break;
+            default:
+              break;
+          }
+          break;
+
+        case SDL_EVENT_KEY_UP:
+          keyState[event.key.scancode] = false;
+          break;
+
+        case SDL_EVENT_WINDOW_RESIZED:
+          updateSwapchain = true;
+          break;
+
+        default:
+          break;
+      }
+    }
+
+    float fwd = 0.0f, side = 0.0f;
+    if(keyState[SDL_SCANCODE_W])
+      fwd += 1.0f;
+    if(keyState[SDL_SCANCODE_S])
+      fwd -= 1.0f;
+    if(keyState[SDL_SCANCODE_A])
+      side += 1.0f;
+    if(keyState[SDL_SCANCODE_D])
+      side -= 1.0f;
+    isSprinting = keyState[SDL_SCANCODE_LSHIFT];
+
+    walker.update(fwd, side, isSprinting);                                            // Update movement
+    walker.integrate_world(camera.pos.x, camera.pos.z, camera.yaw_f(), elapsedTime);  // Update velocity, then integrate
 
     // ==== Update Shader Data ====
     float vfov            = ow_cam::vfov_from_hfov_cfg(HFOV);
     shaderData.projection = glm::perspective(vfov, (float)windowSize.x / (float)windowSize.y, 0.1f, 32.0f);
 
     // View matrix built from OW camera yaw/pitch
-    glm::mat4 rotYaw   = glm::rotate(glm::mat4(1.0f), camera.yaw_rad, glm::vec3(0.0f, 1.0f, 0.0f));
-    glm::mat4 rotPitch = glm::rotate(glm::mat4(1.0f), -camera.pitch_rad, glm::vec3(1.0f, 0.0f, 0.0f));
+    glm::mat4 rotYaw   = glm::rotate(glm::mat4(1.0f), camera.yaw_f(), glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::mat4 rotPitch = glm::rotate(glm::mat4(1.0f), -camera.pitch_f(), glm::vec3(1.0f, 0.0f, 0.0f));
     shaderData.view    = rotPitch * rotYaw * glm::translate(glm::mat4(1.0f), camera.pos);
 
     for(auto i = 0; i < 3; i++)
@@ -989,68 +1051,6 @@ int main(int argc, char* argv[])
       .pImageIndices      = &imageIndex,
     };
     chkSwapchain(vkQueuePresentKHR(queue, &presentInfo));
-
-    // === Polling Events ===
-    constexpr int maxShaderIndex = 2;
-    static bool   keyState[SDL_SCANCODE_COUNT]{};
-
-    SDL_Event event;
-    while(SDL_PollEvent(&event))
-    {
-      switch(event.type)
-      {
-        case SDL_EVENT_QUIT:
-          quit = true;
-          break;
-
-        case SDL_EVENT_MOUSE_MOTION:
-          camera.apply_mouse_delta(event.motion.xrel, event.motion.yrel);
-          break;
-
-        case SDL_EVENT_KEY_DOWN:
-          keyState[event.key.scancode] = true;
-          switch(event.key.key)
-          {
-            case SDLK_ESCAPE:
-              quit = true;
-              break;
-            case SDLK_LEFT:
-              shaderData.selected = (shaderData.selected > 0) ? shaderData.selected - 1 : maxShaderIndex;
-              break;
-            case SDLK_RIGHT:
-              shaderData.selected = (shaderData.selected < maxShaderIndex) ? shaderData.selected + 1 : 0;
-              break;
-            default:
-              break;
-          }
-          break;
-
-        case SDL_EVENT_KEY_UP:
-          keyState[event.key.scancode] = false;
-          break;
-
-        case SDL_EVENT_WINDOW_RESIZED:
-          updateSwapchain = true;
-          break;
-
-        default:
-          break;
-      }
-    }
-
-    float fwd = 0.0f, side = 0.0f;
-    if(keyState[SDL_SCANCODE_W])
-      fwd += 1.0f;
-    if(keyState[SDL_SCANCODE_S])
-      fwd -= 1.0f;
-    if(keyState[SDL_SCANCODE_A])
-      side += 1.0f;
-    if(keyState[SDL_SCANCODE_D])
-      side -= 1.0f;
-    isSprinting = keyState[SDL_SCANCODE_LSHIFT];
-
-    walker.update(fwd, side, isSprinting);                                            // Update movement
-    walker.integrate_world(camera.pos.x, camera.pos.z, camera.yaw_rad, elapsedTime);  // Update velocity, then integrate
 
     if(updateSwapchain)
     {

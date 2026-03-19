@@ -9,14 +9,21 @@ This is a *very* early build.
 * Overwatch Sensitivity [arg: set sensitivity with -sense <value>]
 * Overwatch Movement
 * Simple overlay (fps, crosshair, current settings)
+* FPS Limiter (Win32 high-res waitable timer + spin-wait, ~1ms precision)
 
 ## Immediate Plans
-* Add FPS limiter (normal one + one with VK_EXT_present_timing)
 * Fullscreen / Windowed mode
+
+## Semi-Immediate Plans
+* Fullscreen / Windowed mode
+* Reduced Buffering setting
+* Smart check for all display modes
 
 ## Long Term Plans
 * Convert to ECS Engine
 * Turn into simple FPS Aim Trainer (Like Kovaaks)
+* Make FPS Limiter Linux compatable + VK_EXT_present_timing (if that makes sense even)
+* Actually understand cmake, make a way to build exe and copy on needed files (release build)
 
 ---
 
@@ -30,7 +37,6 @@ cmake --build build && build\\bin\\KitsuneEngine.exe
 
 ### Release
 ```bash
-cmake -B build/release -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ 
-cmake --build build/release
-build\\release\\bin\\KitsuneEngine.exe
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ 
+cmake --build build && build\\bin\\KitsuneEngine.exe
 ```
