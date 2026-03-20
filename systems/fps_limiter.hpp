@@ -72,9 +72,9 @@ inline void sleepUntil(TimePoint target)
 // // Frame-rate limiter; construct once per thread, then call .wait() at the top of your render loop.
 struct Limiter
 {
-  explicit Limiter(double fps)
+  explicit Limiter(double fps) // setting fps to zero disables limiter.
       : frameDuration(toDuration(fps))
-      , _deltaUs(static_cast<int64_t>(1e6 / fps))
+      , _deltaUs(fps > 0.0 ? static_cast<int64_t>(1e6 / fps) : 16667LL)
   {
     auto now = Clock::now();
     deadline = now + frameDuration;
@@ -85,15 +85,19 @@ struct Limiter
   // Call at the TOP of your loop, before input + render.
   void wait()
   {
-    detail::sleepUntil(deadline);
+    if(frameDuration != Clock::duration::zero())
+      detail::sleepUntil(deadline);
 
     auto now = Clock::now();
     _deltaUs = std::chrono::duration_cast<std::chrono::microseconds>(now - lastWake).count();
     lastWake = now;
 
-    deadline += frameDuration;
-    if(deadline < now - frameDuration * 4)  // If we're more than 4 frames behind (e.g. debugger pause, system stall), reset instead of catching up
-      deadline = now + frameDuration;
+    if(frameDuration != Clock::duration::zero())
+    {
+      deadline += frameDuration;
+      if(deadline < now - frameDuration * 4)  // If we're more than 4 frames behind (e.g. debugger pause, system stall), reset instead of catching up
+        deadline = now + frameDuration;
+    }
   }
 
   void setFPS(double fps) { frameDuration = toDuration(fps); }
@@ -104,9 +108,15 @@ struct Limiter
   [[nodiscard]] float   currentFPS() const { return _deltaUs > 0 ? 1e6f / static_cast<float>(_deltaUs) : 0.0f; }
   [[nodiscard]] int64_t deltaUs() const { return _deltaUs; }
 
+
 private:
   // Converts a frames-per-second value to the equivalent std::chrono duration.
-  static Clock::duration toDuration(double fps) { return std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(1.0 / fps)); }
+  static Clock::duration toDuration(double fps)
+  {
+    if(fps <= 0.0)
+      return Clock::duration::zero();
+    return std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(1.0 / fps));
+  }
 
   Clock::duration frameDuration;
   TimePoint       deadline;

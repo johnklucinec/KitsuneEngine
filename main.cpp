@@ -35,9 +35,19 @@
 
 // ========================================
 // Globals
-constexpr float    HFOV    = 103.0f;
-constexpr double   MAX_FPS = 480.0;
-constexpr uint32_t maxFramesInFlight{ 1 };
+struct Settings
+{
+  uint32_t device           = 0;       // GPU deviceIndex
+  float    fov              = 103.0f;  // HFOV
+  float    fps_max          = 120.0f;
+  bool     fullscreen       = false;
+  bool     reduce_buffering = false;
+  float    sensitivity      = 2.70f;
+  bool     vsync            = false;
+};
+
+constexpr uint32_t MAX_FRAMES_IN_FLIGHT{ 2 };
+uint32_t           framesInFlight{ 2 };
 uint32_t           imageIndex{ 0 };
 uint32_t           frameIndex{ 0 };
 
@@ -61,13 +71,13 @@ VmaAllocator  allocator{ VK_NULL_HANDLE };
 VmaAllocation depthImageAllocation;
 VmaAllocation vBufferAllocation{ VK_NULL_HANDLE };
 
-Slang::ComPtr<slang::IGlobalSession>           slangGlobalSession;
-std::array<VkCommandBuffer, maxFramesInFlight> commandBuffers;
-std::array<VkFence, maxFramesInFlight>         fences;
-std::array<VkSemaphore, maxFramesInFlight>     presentSemaphores;
-std::vector<VkSemaphore>                       renderSemaphores;
-std::vector<VkImage>                           swapchainImages;
-std::vector<VkImageView>                       swapchainImageViews;
+Slang::ComPtr<slang::IGlobalSession>              slangGlobalSession;
+std::array<VkCommandBuffer, MAX_FRAMES_IN_FLIGHT> commandBuffers;
+std::array<VkFence, MAX_FRAMES_IN_FLIGHT>         fences;
+std::array<VkSemaphore, MAX_FRAMES_IN_FLIGHT>     presentSemaphores;
+std::vector<VkSemaphore>                          renderSemaphores;
+std::vector<VkImage>                              swapchainImages;
+std::vector<VkImageView>                          swapchainImageViews;
 
 bool           isSprinting = false;
 ow_cam::Camera camera{
@@ -102,7 +112,7 @@ struct ShaderDataBuffer
   VkBuffer          buffer{ VK_NULL_HANDLE };
   VkDeviceAddress   deviceAddress{};
 };
-std::array<ShaderDataBuffer, maxFramesInFlight> shaderDataBuffers;
+std::array<ShaderDataBuffer, MAX_FRAMES_IN_FLIGHT> shaderDataBuffers;
 
 struct Texture
 {
@@ -117,10 +127,11 @@ std::array<Texture, 3> textures{};
 static inline void chk(VkResult result, const std::source_location& loc = std::source_location::current());
 static inline void chkSwapchain(VkResult result, const std::source_location& loc = std::source_location::current());
 static inline void chk(bool result, const std::source_location& loc = std::source_location::current());
-
+Settings           parseArgs(int argc, char* argv[]);
 
 int main(int argc, char* argv[])
 {
+  Settings settings = parseArgs(argc, argv);
   chk(SDL_Init(SDL_INIT_VIDEO));
   chk(SDL_Vulkan_LoadLibrary(NULL));
   volkInitialize();
@@ -152,32 +163,22 @@ int main(int argc, char* argv[])
   std::vector<VkPhysicalDevice> devices(deviceCount);
   chk(vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data()));
 
-  // Optional: select device with positional arg; set sensitivity with -sense <value>
-  uint32_t deviceIndex{ 0 };
-  for(int i = 1; i < argc; i++)
-  {
-    if(std::string(argv[i]) == "-sense" && i + 1 < argc)
-      camera.sensitivity = std::stof(argv[++i]);
-    else
-    {
-      deviceIndex = static_cast<uint32_t>(std::stoi(argv[i]));
-      assert(deviceIndex < deviceCount);
-    }
-  }
+  // Ensure valid deviceIndex
+  assert(settings.device < deviceCount);
 
   // Output device name
   VkPhysicalDeviceProperties2 deviceProperties{
     .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
   };
-  vkGetPhysicalDeviceProperties2(devices[deviceIndex], &deviceProperties);
+  vkGetPhysicalDeviceProperties2(devices[settings.device], &deviceProperties);
   std::cout << "Selected device: " << deviceProperties.properties.deviceName << "\n";
 
   // ========================================
   // Find a Queue Family with Graphics Support
   uint32_t queueFamilyCount{ 0 };
-  vkGetPhysicalDeviceQueueFamilyProperties(devices[deviceIndex], &queueFamilyCount, nullptr);
+  vkGetPhysicalDeviceQueueFamilyProperties(devices[settings.device], &queueFamilyCount, nullptr);
   std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-  vkGetPhysicalDeviceQueueFamilyProperties(devices[deviceIndex], &queueFamilyCount, queueFamilies.data());
+  vkGetPhysicalDeviceQueueFamilyProperties(devices[settings.device], &queueFamilyCount, queueFamilies.data());
   uint32_t queueFamily{ 0 };
   for(size_t i = 0; i < queueFamilies.size(); i++)
   {
@@ -187,7 +188,7 @@ int main(int argc, char* argv[])
       break;
     }
   }
-  chk(SDL_Vulkan_GetPresentationSupport(instance, devices[deviceIndex], queueFamily));
+  chk(SDL_Vulkan_GetPresentationSupport(instance, devices[settings.device], queueFamily));
 
   // ========================================
   // Logical Device Setup
@@ -226,7 +227,7 @@ int main(int argc, char* argv[])
     .ppEnabledExtensionNames = deviceExtensions.data(),
     .pEnabledFeatures        = &enabledVk10Features,
   };
-  chk(vkCreateDevice(devices[deviceIndex], &deviceCI, nullptr, &device));
+  chk(vkCreateDevice(devices[settings.device], &deviceCI, nullptr, &device));
   vkGetDeviceQueue(device, queueFamily, 0, &queue);  // request queue from device
 
   // ========================================
@@ -238,7 +239,7 @@ int main(int argc, char* argv[])
   };
   VmaAllocatorCreateInfo allocatorCI{
     .flags            = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
-    .physicalDevice   = devices[deviceIndex],
+    .physicalDevice   = devices[settings.device],
     .device           = device,
     .pVulkanFunctions = &vkFunctions,
     .instance         = instance,
@@ -247,13 +248,27 @@ int main(int argc, char* argv[])
 
   // ========================================
   // Window and Surface
-  SDL_Window* window = SDL_CreateWindow("KitsuneEngine", 1920u, 1080u, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+  SDL_Window* window = SDL_CreateWindow("KitsuneEngine", 1600u, 900u, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
   assert(window);
-  chk(SDL_Vulkan_CreateSurface(window, instance, nullptr, &surface));  // request vulkan surface
-  chk(SDL_GetWindowSize(window, &windowSize.x, &windowSize.y));
+
+  if(settings.fullscreen)
+  {
+    SDL_DisplayID displayID = SDL_GetPrimaryDisplay();
+    assert(displayID != 0);
+
+    const SDL_DisplayMode* mode = SDL_GetCurrentDisplayMode(displayID);
+    assert(mode);
+
+    chk(SDL_SetWindowFullscreenMode(window, mode));  // NULL = borderless; mode = exclusive
+    chk(SDL_SetWindowFullscreen(window, true));
+    SDL_SyncWindow(window);
+  }
+
+  chk(SDL_Vulkan_CreateSurface(window, instance, nullptr, &surface));
+  chk(SDL_GetWindowSize(window, &windowSize.x, &windowSize.y));  // now returns fullscreen dims if applicable
   SDL_SetWindowRelativeMouseMode(window, true);
   VkSurfaceCapabilitiesKHR surfaceCaps{};
-  chk(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(devices[deviceIndex], surface, &surfaceCaps));  // request surface properties
+  chk(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(devices[settings.device], surface, &surfaceCaps));
 
   // ========================================
   // Swapchain
@@ -300,7 +315,7 @@ int main(int argc, char* argv[])
   for(VkFormat& format : depthFormatList)
   {
     VkFormatProperties2 formatProperties{ .sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2 };
-    vkGetPhysicalDeviceFormatProperties2(devices[deviceIndex], format, &formatProperties);
+    vkGetPhysicalDeviceFormatProperties2(devices[settings.device], format, &formatProperties);
     if(formatProperties.formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
     {
       depthFormat = format;
@@ -381,7 +396,7 @@ int main(int argc, char* argv[])
 
   // ========================================
   // Shader Data Buffers
-  for(auto i = 0; i < maxFramesInFlight; i++)  // One per max frame in flight
+  for(auto i = 0; i < framesInFlight; i++)  // One per max frame in flight
   {
     VkBufferCreateInfo uBufferCI{
       .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -409,7 +424,7 @@ int main(int argc, char* argv[])
     .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
     .flags = VK_FENCE_CREATE_SIGNALED_BIT,
   };
-  for(auto i = 0; i < maxFramesInFlight; i++)  // One fence per frame in flight
+  for(auto i = 0; i < framesInFlight; i++)  // One fence per frame in flight
   {
     chk(vkCreateFence(device, &fenceCI, nullptr, &fences[i]));
     chk(vkCreateSemaphore(device, &semaphoreCI, nullptr, &presentSemaphores[i]));
@@ -431,7 +446,7 @@ int main(int argc, char* argv[])
   VkCommandBufferAllocateInfo cbAllocCI{
     .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
     .commandPool        = commandPool,
-    .commandBufferCount = maxFramesInFlight,  // One command buffer per frame in flight
+    .commandBufferCount = framesInFlight,  // One command buffer per frame in flight
   };
   chk(vkAllocateCommandBuffers(device, &cbAllocCI, commandBuffers.data()));
 
@@ -627,7 +642,7 @@ int main(int argc, char* argv[])
   chk(vkCreateDescriptorPool(device, &descPoolCI, nullptr, &descriptorPool));
 
   // Initialize the ImGui overlay
-  ow_overlay::init(window, instance, devices[deviceIndex], device, queue, queueFamily, static_cast<uint32_t>(swapchainImages.size()), imageFormat,
+  ow_overlay::init(window, instance, devices[settings.device], device, queue, queueFamily, static_cast<uint32_t>(swapchainImages.size()), imageFormat,
                    descriptorPool, surfaceCaps.minImageCount);
 
   uint32_t variableDescCount{ static_cast<uint32_t>(textures.size()) };
@@ -796,7 +811,7 @@ int main(int argc, char* argv[])
 
   // ========================================
   // Render Loop
-  fps::Limiter limiter(MAX_FPS);
+  fps::Limiter limiter(settings.fps_max);
   bool         quit{ false };
 
   while(!quit)
@@ -878,7 +893,7 @@ int main(int argc, char* argv[])
     walker.integrate_world(camera.pos.x, camera.pos.z, camera.yaw_f(), elapsedTime);  // Update velocity, then integrate
 
     // ==== Update Shader Data ====
-    float vfov            = ow_cam::vfov_from_hfov_cfg(HFOV);
+    float vfov            = ow_cam::vfov_from_hfov_cfg(settings.fov);
     shaderData.projection = glm::perspective(vfov, (float)windowSize.x / (float)windowSize.y, 0.1f, 32.0f);
 
     // View matrix built from OW camera yaw/pitch
@@ -995,9 +1010,9 @@ int main(int argc, char* argv[])
     // Build ImGui HUD
     ow_overlay::FrameData fd{
       .fps                  = fps,
-      .frames_in_flight     = maxFramesInFlight,
-      .fps_limited          = false,
-      .fullscreen_exclusive = false,
+      .frames_in_flight     = (int)framesInFlight,
+      .fps_limited          = settings.fps_max != 0,
+      .fullscreen_exclusive = settings.fullscreen,
     };
     ow_overlay::build_ui(fd);
     ow_overlay::record_draw(cb);
@@ -1039,7 +1054,7 @@ int main(int argc, char* argv[])
     };
     chk(vkQueueSubmit(queue, 1, &submitInfo, fences[frameIndex]));
 
-    frameIndex = (frameIndex + 1) % maxFramesInFlight;  // calculate frame index for next render loop iteration
+    frameIndex = (frameIndex + 1) % framesInFlight;  // calculate frame index for next render loop iteration
 
     // === Present Image ===
     VkPresentInfoKHR presentInfo{
@@ -1060,7 +1075,7 @@ int main(int argc, char* argv[])
 
       // Wait until the GPU has completed all outstanding operations
       chk(vkDeviceWaitIdle(device));
-      chk(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(devices[deviceIndex], surface, &surfaceCaps));
+      chk(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(devices[settings.device], surface, &surfaceCaps));
       swapchainCI.oldSwapchain = swapchain;  // Allow the application to continue presenting any already acquired image.
       swapchainCI.imageExtent  = {
          .width  = static_cast<uint32_t>(windowSize.x),
@@ -1117,7 +1132,7 @@ int main(int argc, char* argv[])
   // ========================================
   // Cleaning Up
   chk(vkDeviceWaitIdle(device));  // Wait until the GPU has completed all outstanding operations
-  for(auto i = 0; i < maxFramesInFlight; i++)
+  for(auto i = 0; i < framesInFlight; i++)
   {
     vkDestroyFence(device, fences[i], nullptr);
     vkDestroySemaphore(device, presentSemaphores[i], nullptr);
@@ -1193,4 +1208,69 @@ static inline void chk(bool result, const std::source_location& loc)
               << "Call returned false\n";
     exit(1);
   }
+}
+
+Settings parseArgs(int argc, char* argv[])
+{
+  Settings s{};
+
+  auto parseFloat = [&](std::string_view name, float lo, float hi, float& dst, int& i) {
+    if(i + 1 < argc)
+    {
+      float            value{};
+      std::string_view next{ argv[i + 1] };
+      auto [ptr, ec] = std::from_chars(next.data(), next.data() + next.size(), value);
+      if(ec == std::errc{} && value >= lo && value <= hi)
+      {
+        dst = value;
+        ++i;
+        return;
+      }
+    }
+    std::fprintf(stderr, "Invalid %.*s\n", (int)name.size(), name.data());
+  };
+
+  auto parseUint = [&](std::string_view name, uint32_t& dst, int& i) {
+    if(i + 1 < argc)
+    {
+      uint32_t         value{};
+      std::string_view next{ argv[i + 1] };
+      auto [ptr, ec] = std::from_chars(next.data(), next.data() + next.size(), value);
+      if(ec == std::errc{})
+      {
+        dst = value;
+        ++i;
+        return;
+      }
+    }
+    std::fprintf(stderr, "Invalid %.*s\n", (int)name.size(), name.data());
+  };
+
+  for(int i = 1; i < argc; ++i)
+  {
+    std::string_view arg{ argv[i] };
+
+    if(arg == "-device")
+      parseUint("device", s.device, i);
+    else if(arg == "-fov")
+      parseFloat("fov", 30.f, 160.f, s.fov, i);
+    else if(arg == "-fps_max")
+      parseFloat("fps_max", 0.f, 9999.f, s.fps_max, i);
+    else if(arg == "-fullscreen")
+      s.fullscreen = true;
+    else if(arg == "-reduce_buffering")
+    {
+      s.reduce_buffering = true;
+      framesInFlight     = 1;
+    }
+    else if(arg == "-sensitivity")
+    {
+      parseFloat("sensitivity", 0.f, 100.f, s.sensitivity, i);
+      camera.sensitivity = s.sensitivity;
+    }
+    else if(arg == "-vsync")
+      s.vsync = true;
+  }
+
+  return s;
 }
