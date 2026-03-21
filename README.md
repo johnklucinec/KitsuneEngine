@@ -12,17 +12,20 @@ This is a *very* early build.
 * FPS Limiter (Win32 high-res waitable timer + spin-wait, ~1ms precision)
 
 ## Immediate Plans
-* Fullscreen / Windowed mode [partially completed - ALT + ENTER should also toggle]
+* Fullscreen / Windowed mode [partially completed with launch options - ALT + ENTER should also toggle]
 
 ## Semi-Immediate Plans
-* Fullscreen Exclusive vs Fullscreen Borderless
-* Smart check for all display modes
+* Fullscreen Exclusive vs Fullscreen Borderless.
+* Smart check for all display modes.
+* Disable unused SLD3 features. 
 
 ## Long Term Plans
 * Convert to ECS Engine
-* Turn into simple FPS Aim Trainer (Like Kovaaks)
+* Turn into a simple FPS Aim Trainer (Like Kovaaks)
 * Make FPS Limiter Linux compatable + VK_EXT_present_timing (if that makes sense even)
-* Actually understand cmake, make a way to build exe and copy on needed files (release build)
+* Make CMAKE better for release build
+* Convert to VK_EXT_descriptor_heap. (Two backends in an RHI?).
+* Convert to Forward+. Mainly when the engine gets more advanced. 
 ---
 
 ## Settings! (Launch Options)
