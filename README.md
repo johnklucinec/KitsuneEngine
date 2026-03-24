@@ -19,14 +19,16 @@ This is a _very_ early build.
 ## Semi-Immediate Plans
 
 - Fullscreen Exclusive vs Fullscreen Borderless
-- Smart check for all display modes
+- Smart check for all display modes\
+- Disable unused SLD3 features. 
+
 
 ## Long Term Plans
-
-- Turn into simple FPS Aim Trainer (Like Kovaaks)
-- Make FPS Limiter Linux compatable + VK_EXT_present_timing (if that makes sense even)
-- Actually understand cmake, make a way to build exe and copy on needed files (release build)
-
+* Turn into a simple FPS Aim Trainer (Like Kovaaks)
+* Make FPS Limiter Linux compatable + VK_EXT_present_timing (if that makes sense even)
+* Make CMAKE better for release build
+* Convert to VK_EXT_descriptor_heap. (Two backends in an RHI?).
+* Convert to Forward+. Mainly when the engine gets more advanced. 
 ---
 
 ## Settings! (Launch Options)
