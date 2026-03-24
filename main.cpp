@@ -43,6 +43,7 @@ struct Settings
   bool     fullscreen       = false;
   bool     reduce_buffering = false;
   float    sensitivity      = 2.70f;
+  bool     show_ui          = true;
   bool     vsync            = false;
 };
 
@@ -65,6 +66,7 @@ VkQueue               queue{ VK_NULL_HANDLE };
 VkSurfaceKHR          surface{ VK_NULL_HANDLE };
 VkSwapchainKHR        swapchain{ VK_NULL_HANDLE };
 bool                  updateSwapchain{ false };
+bool                  updateFullscreen{ true };
 VkBuffer              vBuffer{ VK_NULL_HANDLE };
 
 VmaAllocator  allocator{ VK_NULL_HANDLE };
@@ -261,7 +263,7 @@ int main(int argc, char* argv[])
 
     chk(SDL_SetWindowFullscreenMode(window, mode));  // NULL = borderless; mode = exclusive
     chk(SDL_SetWindowFullscreen(window, true));
-    SDL_SyncWindow(window);
+    chk(SDL_SyncWindow(window));
   }
 
   chk(SDL_Vulkan_CreateSurface(window, instance, nullptr, &surface));
@@ -825,7 +827,8 @@ int main(int argc, char* argv[])
     float elapsedTime = limiter.deltaTime();
     float fps         = limiter.currentFPS();
 
-    ow_overlay::begin_frame();  // begin frame for ImGui
+    if(settings.show_ui)
+      ow_overlay::begin_frame();  // begin frame for ImGui
 
     // ==== Aquire Next Image ====
     chkSwapchain(vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, presentSemaphores[frameIndex], VK_NULL_HANDLE, &imageIndex));
@@ -849,6 +852,7 @@ int main(int argc, char* argv[])
 
         case SDL_EVENT_KEY_DOWN:
           keyState[event.key.scancode] = true;
+
           switch(event.key.key)
           {
             case SDLK_ESCAPE:
@@ -862,6 +866,20 @@ int main(int argc, char* argv[])
               break;
             default:
               break;
+          }
+
+          if(event.key.mod & SDL_KMOD_LALT)
+          {
+            switch(event.key.key)
+            {
+              case SDLK_RETURN:
+                settings.fullscreen = !settings.fullscreen;
+                updateFullscreen    = true;
+                break;
+              case SDLK_Z:
+                settings.show_ui = !settings.show_ui;
+                break;
+            }
           }
           break;
 
@@ -1008,14 +1026,17 @@ int main(int argc, char* argv[])
     vkCmdDrawIndexed(cb, indexCount, 3, 0, 0, 0);  // commandBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstanceID
 
     // Build ImGui HUD
-    ow_overlay::FrameData fd{
-      .fps                  = fps,
-      .frames_in_flight     = (int)framesInFlight,
-      .fps_limited          = settings.fps_max != 0,
-      .fullscreen_exclusive = settings.fullscreen,
-    };
-    ow_overlay::build_ui(fd);
-    ow_overlay::record_draw(cb);
+    if(settings.show_ui)
+    {
+      ow_overlay::FrameData fd{
+        .fps                  = fps,
+        .frames_in_flight     = (int)framesInFlight,
+        .fps_limited          = settings.fps_max != 0,
+        .fullscreen_exclusive = settings.fullscreen,
+      };
+      ow_overlay::build_ui(fd);
+      ow_overlay::record_draw(cb);
+    }
 
     vkCmdEndRendering(cb);  // Finish current render pass
 
@@ -1067,10 +1088,29 @@ int main(int argc, char* argv[])
     };
     chkSwapchain(vkQueuePresentKHR(queue, &presentInfo));
 
+    if(updateFullscreen)
+    {
+      if(settings.fullscreen)
+      {
+        SDL_DisplayID          displayID = SDL_GetPrimaryDisplay();
+        const SDL_DisplayMode* mode      = SDL_GetCurrentDisplayMode(displayID);
+        chk(SDL_SetWindowFullscreenMode(window, mode));
+        chk(SDL_SetWindowFullscreen(window, true));
+        chk(SDL_SyncWindow(window));
+      }
+      else
+      {
+        chk(SDL_SetWindowFullscreen(window, false));
+      }
+      chk(SDL_GetWindowSize(window, &windowSize.x, &windowSize.y));
+      updateFullscreen = false;
+      updateSwapchain  = true;
+    }
+
     if(updateSwapchain)
     {
       chk(SDL_GetWindowSize(window, &windowSize.x, &windowSize.y));
-      SDL_SetWindowRelativeMouseMode(window, true);
+      chk(SDL_SetWindowRelativeMouseMode(window, true));
       updateSwapchain = false;
 
       // Wait until the GPU has completed all outstanding operations
