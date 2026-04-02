@@ -14,7 +14,7 @@ This is a _very_ early build.
 
 ## Immediate Plans
 
-- Convert to ECS Engine
+- Convert to ECS Engine (In Progress)
 
 ## Semi-Immediate Plans
 

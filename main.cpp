@@ -383,6 +383,8 @@ int main(int argc, char* argv[])
     .size  = vBufSize + iBufSize,
     .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
   };
+
+  // Persistent Mapping
   VmaAllocationCreateInfo vBufferAllocCI{
     // NOTE: without ReBAR, host-visible VRAM is limited to 256MB. Exhausting it falls back to non-host-visible DEVICE_LOCAL via ALLOW_TRANSFER_INSTEAD
     .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT
