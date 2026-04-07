@@ -28,24 +28,19 @@
 #include <tiny_obj_loader.h>
 #include <source_location>
 
-#include "systems/ow_cam.hpp"
-#include "systems/ow_move.hpp"
-#include "systems/ow_overlay.hpp"
-#include "systems/fps_limiter.hpp"
+#include "temp_systems/ow_overlay.hpp"
+#include "temp_systems/fps_limiter.hpp"
 
-// ========================================
-// Globals
-struct Settings
-{
-  uint32_t device           = 0;       // GPU deviceIndex
-  float    fov              = 103.0f;  // HFOV
-  float    fps_max          = 120.0f;
-  bool     fullscreen       = false;
-  bool     reduce_buffering = false;
-  float    sensitivity      = 2.70f;
-  bool     show_ui          = true;
-  bool     vsync            = false;
-};
+#include <entt/entt.hpp>
+#include "core/settings.hpp"
+#include "core/app.hpp"
+#include "components/transform.hpp"
+#include "systems/input.hpp"
+#include "components/input.hpp"
+#include "systems/camera.hpp"
+#include "components/camera.hpp"
+#include "utils/cam_utils.hpp"
+#include "systems/player_movement.hpp"
 
 constexpr uint32_t MAX_FRAMES_IN_FLIGHT{ 2 };
 uint32_t           framesInFlight{ 2 };
@@ -82,11 +77,10 @@ std::vector<VkImage>                              swapchainImages;
 std::vector<VkImageView>                          swapchainImageViews;
 
 bool           isSprinting = false;
-ow_cam::Camera camera{
-  .pos         = { 0.0f, 0.0f, -6.0f },
-  .sensitivity = 2.70f,
-};
-ow_move::Walker walker{};
+// ow_cam::Camera camera{
+//   .pos         = { 0.0f, 0.0f, -6.0f },
+//   .sensitivity = 2.70f,
+// };
 glm::ivec2      windowSize{};
 
 // ========================================
@@ -131,9 +125,12 @@ static inline void chkSwapchain(VkResult result, const std::source_location& loc
 static inline void chk(bool result, const std::source_location& loc = std::source_location::current());
 Settings           parseArgs(int argc, char* argv[]);
 
-int main(int argc, char* argv[])
+int run(int argc, char* argv[], entt::registry& registry, entt::entity playerEntity)
 {
-  Settings settings = parseArgs(argc, argv);
+  auto& app      = registry.ctx().get<AppState>();
+  auto& settings = registry.ctx().get<Settings>();
+  settings       = parseArgs(argc, argv);
+
   chk(SDL_Init(SDL_INIT_VIDEO));
   chk(SDL_Vulkan_LoadLibrary(NULL));
   volkInitialize();
@@ -358,7 +355,7 @@ int main(int argc, char* argv[])
   tinyobj::attrib_t                attrib;
   std::vector<tinyobj::shape_t>    shapes;
   std::vector<tinyobj::material_t> materials;
-  chk(tinyobj::LoadObj(&attrib, &shapes, &materials, nullptr, nullptr, "assets/suzanne.obj"));
+  chk(tinyobj::LoadObj(&attrib, &shapes, &materials, nullptr, nullptr, "assets/models/suzanne.obj"));
   const VkDeviceSize    indexCount{ shapes[0].mesh.indices.size() };
   std::vector<Vertex>   vertices{};
   std::vector<uint16_t> indices{};
@@ -460,7 +457,7 @@ int main(int argc, char* argv[])
   for(auto i = 0; i < textures.size(); i++)
   {
     ktxTexture* ktxTexture{ nullptr };
-    std::string filename = "assets/suzanne" + std::to_string(i) + ".ktx";
+    std::string filename = "assets/models/suzanne" + std::to_string(i) + ".ktx";
     ktxTexture_CreateFromNamedFile(filename.c_str(), KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &ktxTexture);
 
     // Creating the image (object)
@@ -703,7 +700,7 @@ int main(int argc, char* argv[])
   slangGlobalSession->createSession(slangSessionDesc, slangSession.writeRef());
 
   // Load the Shader
-  Slang::ComPtr<slang::IModule> slangModule{ slangSession->loadModuleFromSource("triangle", "assets/shader.slang", nullptr, nullptr) };
+  Slang::ComPtr<slang::IModule> slangModule{ slangSession->loadModuleFromSource("triangle", "assets/shaders/shader.slang", nullptr, nullptr) };
   Slang::ComPtr<ISlangBlob>     spirv;
   slangModule->getTargetCode(0, spirv.writeRef());
 
@@ -816,9 +813,8 @@ int main(int argc, char* argv[])
   // ========================================
   // Render Loop
   fps::Limiter limiter(settings.fps_max);
-  bool         quit{ false };
 
-  while(!quit)
+  while(app.running)
   {
     // ==== Wait on Fence (sync) ====
     chk(vkWaitForFences(device, 1, &fences[frameIndex], true, UINT64_MAX));  // Wait for last frame GPU is working on
@@ -837,89 +833,43 @@ int main(int argc, char* argv[])
 
     // === Polling Events ===
     constexpr int maxShaderIndex = 2;
-    static bool   keyState[SDL_SCANCODE_COUNT]{};
 
-    SDL_Event event;
-    while(SDL_PollEvent(&event))
+    sys::input(registry);
+    sys::camera(registry);
+    sys::player_movement(registry, elapsedTime);
+
+    const auto& in        = registry.get<Input>(playerEntity);
+    const auto& cam       = registry.get<Camera>(playerEntity);
+    auto&       transform = registry.get<Transform>(playerEntity);
+
+    // One-shot actions
+    // TODO: Move to own system
+    if(key_just_pressed(in, Key::Escape))
+      app.running = false;
+
+    if(key_down(in, Key::LAlt) && key_just_pressed(in, Key::Return))
     {
-      switch(event.type)
-      {
-        case SDL_EVENT_QUIT:
-          quit = true;
-          break;
-
-        case SDL_EVENT_MOUSE_MOTION:
-          camera.apply_mouse_delta(event.motion.xrel, event.motion.yrel);
-          break;
-
-        case SDL_EVENT_KEY_DOWN:
-          keyState[event.key.scancode] = true;
-
-          switch(event.key.key)
-          {
-            case SDLK_ESCAPE:
-              quit = true;
-              break;
-            case SDLK_LEFT:
-              shaderData.selected = (shaderData.selected > 0) ? shaderData.selected - 1 : maxShaderIndex;
-              break;
-            case SDLK_RIGHT:
-              shaderData.selected = (shaderData.selected < maxShaderIndex) ? shaderData.selected + 1 : 0;
-              break;
-            default:
-              break;
-          }
-
-          if(event.key.mod & SDL_KMOD_LALT)
-          {
-            switch(event.key.key)
-            {
-              case SDLK_RETURN:
-                settings.fullscreen = !settings.fullscreen;
-                updateFullscreen    = true;
-                break;
-              case SDLK_Z:
-                settings.show_ui = !settings.show_ui;
-                break;
-            }
-          }
-          break;
-
-        case SDL_EVENT_KEY_UP:
-          keyState[event.key.scancode] = false;
-          break;
-
-        case SDL_EVENT_WINDOW_RESIZED:
-          updateSwapchain = true;
-          break;
-
-        default:
-          break;
-      }
+      settings.fullscreen  = !settings.fullscreen;
+      updateFullscreen     = true;
+      app.resize_swapchain = true;
     }
 
-    float fwd = 0.0f, side = 0.0f;
-    if(keyState[SDL_SCANCODE_W])
-      fwd += 1.0f;
-    if(keyState[SDL_SCANCODE_S])
-      fwd -= 1.0f;
-    if(keyState[SDL_SCANCODE_A])
-      side += 1.0f;
-    if(keyState[SDL_SCANCODE_D])
-      side -= 1.0f;
-    isSprinting = keyState[SDL_SCANCODE_LSHIFT];
+    if(key_down(in, Key::LAlt) && key_just_pressed(in, Key::Z))
+      settings.show_ui = !settings.show_ui;
 
-    walker.update(fwd, side, isSprinting);                                            // Update movement
-    walker.integrate_world(camera.pos.x, camera.pos.z, camera.yaw_f(), elapsedTime);  // Update velocity, then integrate
+    if(key_just_pressed(in, Key::ArrowLeft))
+      shaderData.selected = (shaderData.selected > 0) ? shaderData.selected - 1 : maxShaderIndex;
+
+    if(key_just_pressed(in, Key::ArrowRight))
+      shaderData.selected = (shaderData.selected < maxShaderIndex) ? shaderData.selected + 1 : 0;
 
     // ==== Update Shader Data ====
-    float vfov            = ow_cam::vfov_from_hfov_cfg(settings.fov);
-    shaderData.projection = glm::perspective(vfov, (float)windowSize.x / (float)windowSize.y, 0.1f, 32.0f);
+    // TODO: ONLY RUN On init / swapchain resize / FOV change:
+    // Can't do till shaderData is seperate..
+    shaderData.projection = CamUtils::proj_matrix(cam, static_cast<float>(windowSize.x) / static_cast<float>(windowSize.y));
 
-    // View matrix built from OW camera yaw/pitch
-    glm::mat4 rotYaw   = glm::rotate(glm::mat4(1.0f), camera.yaw_f(), glm::vec3(0.0f, 1.0f, 0.0f));
-    glm::mat4 rotPitch = glm::rotate(glm::mat4(1.0f), -camera.pitch_f(), glm::vec3(1.0f, 0.0f, 0.0f));
-    shaderData.view    = rotPitch * rotYaw * glm::translate(glm::mat4(1.0f), camera.pos);
+    // View matrix
+    shaderData.view = CamUtils::view_matrix(cam, transform);
 
     for(auto i = 0; i < 3; i++)
     {
@@ -1105,15 +1055,15 @@ int main(int argc, char* argv[])
         chk(SDL_SetWindowFullscreen(window, false));
       }
       chk(SDL_GetWindowSize(window, &windowSize.x, &windowSize.y));
-      updateFullscreen = false;
-      updateSwapchain  = true;
+      updateFullscreen     = false;
+      app.resize_swapchain = true;
     }
 
-    if(updateSwapchain)
+    if(app.resize_swapchain)
     {
       chk(SDL_GetWindowSize(window, &windowSize.x, &windowSize.y));
       chk(SDL_SetWindowRelativeMouseMode(window, true));
-      updateSwapchain = false;
+      app.resize_swapchain = false;
 
       // Wait until the GPU has completed all outstanding operations
       chk(vkDeviceWaitIdle(device));
@@ -1212,6 +1162,8 @@ int main(int argc, char* argv[])
   SDL_Quit();
   vkDestroyDevice(device, nullptr);
   vkDestroyInstance(instance, nullptr);  // Should be deleted last
+
+  return 0;
 }
 
 
@@ -1308,7 +1260,8 @@ Settings parseArgs(int argc, char* argv[])
     else if(arg == "-sensitivity")
     {
       parseFloat("sensitivity", 0.f, 100.f, s.sensitivity, i);
-      camera.sensitivity = s.sensitivity;
+      // camera.sensitivity = s.sensitivity;
+      // TODO: Refactor into settings?
     }
     else if(arg == "-vsync")
       s.vsync = true;

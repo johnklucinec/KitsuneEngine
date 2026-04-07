@@ -1,10 +1,9 @@
 #pragma once
 #include <vulkan/vulkan.h>
-#include <vk_mem_alloc.h>
+#include <vma/vk_mem_alloc.h>
 #include <array>
 #include <vector>
-
-inline constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+#include "common.hpp"
 
 struct FrameData
 {

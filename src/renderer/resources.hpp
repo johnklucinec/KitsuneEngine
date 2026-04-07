@@ -1,12 +1,11 @@
 #pragma once
 #include <vulkan/vulkan.h>
-#include <vk_mem_alloc.h>
-#include <slang.h>
-#include <slang-com-ptr.h>
+#include <vma/vk_mem_alloc.h>
+#include "slang/slang.h"
+#include "slang/slang-com-ptr.h"
 #include <glm/glm.hpp>
 #include <array>
-
-constexpr uint32_t MAX_FRAMES_IN_FLIGHT{ 2 };
+#include "common.hpp"
 
 struct Vertex
 {
