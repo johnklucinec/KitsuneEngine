@@ -5,6 +5,8 @@
 #include <vector>
 #include "common.hpp"
 
+struct VkContext;
+
 struct FrameData
 {
   VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
@@ -20,3 +22,8 @@ struct FrameState
   std::array<FrameData, MAX_FRAMES_IN_FLIGHT> frames;
   std::vector<VkSemaphore>                    renderSemaphores;  // one per swapchain image
 };
+
+namespace renderer {
+void initFrameState(FrameState& fs, const VkContext& ctx, uint32_t swapchainImageCount);
+void destroyFrameState(FrameState& fs, const VkContext& ctx);
+}  // namespace renderer

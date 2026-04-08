@@ -1,5 +1,8 @@
 #pragma once
 #include <vulkan/vulkan.h>
+#include <span>
+
+struct VkContext;
 
 struct PipelineState
 {
@@ -9,3 +12,8 @@ struct PipelineState
   VkDescriptorPool      descPool      = VK_NULL_HANDLE;
   VkDescriptorSet       descSet       = VK_NULL_HANDLE;
 };
+
+namespace renderer {
+void initPipeline(PipelineState& ps, const VkContext& ctx, VkFormat colorFmt, VkFormat depthFmt, std::span<const VkDescriptorImageInfo> textures);
+void destroyPipeline(PipelineState& ps, const VkContext& ctx);
+}  // namespace renderer

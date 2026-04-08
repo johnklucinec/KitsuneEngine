@@ -1,4 +1,5 @@
 #pragma once
+
 #include <vulkan/vulkan.h>
 #include <vma/vk_mem_alloc.h>
 #include "slang/slang.h"
@@ -7,14 +8,9 @@
 #include <array>
 #include "common.hpp"
 
-struct Vertex
-{
-  glm::vec3 pos;
-  glm::vec3 normal;
-  glm::vec2 uv;
-};
+struct VkContext;
 
-struct ShaderData
+struct ShaderData  // Look into scalarBlockLayout
 {
   glm::mat4 projection;
   glm::mat4 view;
@@ -43,8 +39,16 @@ struct SceneResources
 {
   VkBuffer                                           vBuffer      = VK_NULL_HANDLE;
   VmaAllocation                                      vBufferAlloc = VK_NULL_HANDLE;
+  uint32_t                                           indexCount   = 0;
+  VkDeviceSize                                       indexOffset  = 0;
   ShaderData                                         shaderData{};
   std::array<ShaderDataBuffer, MAX_FRAMES_IN_FLIGHT> shaderDataBuffers;
   std::array<Texture, 3>                             textures{};
   Slang::ComPtr<slang::IGlobalSession>               slangSession;
 };
+
+namespace renderer {
+// Returns texture descriptors needed by initPipeline
+std::vector<VkDescriptorImageInfo> initSceneResources(SceneResources& res, const VkContext& ctx, uint32_t framesInFlight);
+void                               destroySceneResources(SceneResources& res, const VkContext& ctx);
+}  // namespace renderer

@@ -1,11 +1,5 @@
 #include <entt/entt.hpp>
 
-// #define VMA_IMPLEMENTATION
-// #include "renderer/context.hpp"
-// #include "renderer/frame.hpp"
-// #include "renderer/pipeline.hpp"
-// #include "renderer/resources.hpp"
-// #include "swapchain.hpp"
 #include "core/settings.hpp"
 #include "core/app.hpp"
 #include "input.hpp"
@@ -18,33 +12,26 @@ int main(int argc, char* argv[])
 {
   entt::registry registry;
 
-  // // Renderer contexts
-  // registry.ctx().emplace<VkContext>();
-  // registry.ctx().emplace<SwapchainState>();
-  // registry.ctx().emplace<FrameState>();
-  // registry.ctx().emplace<PipelineState>();
-  // registry.ctx().emplace<SceneResources>();
+  // Renderer contexts
+  registry.ctx().emplace<VkContext>();
+  registry.ctx().emplace<SwapchainState>();
+  registry.ctx().emplace<FrameState>();
+  registry.ctx().emplace<SceneResources>();
+  registry.ctx().emplace<PipelineState>();
 
   // App config
   registry.ctx().emplace<Settings>();
   registry.ctx().emplace<AppState>();
 
-  const entt::entity playerEntity = registry.create();
-  registry.emplace<Input>(playerEntity);
-  registry.emplace<Transform>(playerEntity, glm::vec3{ 0.f, 0.f, -6.f }, glm::quat{}, glm::vec3{ 1.f });
-  registry.emplace<Camera>(playerEntity, Camera{ .fov = 90.f });
-  registry.emplace<Velocity>(playerEntity);
-  registry.emplace<PlayerMovement>(playerEntity);  // uses PC_BASE_SPEED defaults
-
   // // Player entity
-  // auto player = registry.create();
-  // registry.emplace<Transform>(player, glm::vec3{ 0.f, 0.f, -6.f }, glm::quat{}, glm::vec3{ 1.f });
-  // registry.emplace<Camera>(player, Camera{ .fov = 90.f });
-  // registry.emplace<PlayerController>(player, PlayerController{ .sensitivity = 2.70f });
-  // registry.emplace<Velocity>(player);
-  // registry.emplace<Input>(player);
+  const entt::entity player = registry.create();
+  registry.emplace<Input>(player);
+  registry.emplace<Transform>(player, glm::vec3{ 0.f, 0.f, -6.f }, glm::quat{}, glm::vec3{ 1.f });
+  registry.emplace<Camera>(player, Camera{ .fov = 90.f });
+  registry.emplace<Velocity>(player);
+  registry.emplace<PlayerMovement>(player);  // uses PC_BASE_SPEED defaults
 
-  return run(argc, argv, registry, playerEntity);
+  return run(argc, argv, registry, player);
   // your game loop will go here
   return 0;
 }
