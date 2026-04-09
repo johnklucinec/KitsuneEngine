@@ -1,17 +1,21 @@
 #include "pipeline.hpp"
 #include "context.hpp"
+#include "swapchain.hpp"
+#include "resources.hpp"
 #include "types.hpp"
 
 #include <slang/slang.h>
 #include <slang/slang-com-ptr.h>
 #include <array>
 #include <cassert>
+#include <span>
 #include "common.hpp"
 
 namespace renderer {
 
-void initPipeline(PipelineState& ps, const VkContext& ctx, VkFormat colorFmt, VkFormat depthFmt, std::span<const VkDescriptorImageInfo> textures)
+void initPipeline(PipelineState& ps, const VkContext& ctx, const SwapchainState& sc, const SceneResources& res)
 {
+  const auto textures = std::span<const VkDescriptorImageInfo>(res.textureDescriptors);
   // ========================================
   // Descriptor Set Layout
   VkDescriptorBindingFlags descVariableFlag{ VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT };
@@ -204,8 +208,8 @@ void initPipeline(PipelineState& ps, const VkContext& ctx, VkFormat colorFmt, Vk
   VkPipelineRenderingCreateInfo renderingCI{
     .sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,  // We are using dynamic rendering
     .colorAttachmentCount    = 1,
-    .pColorAttachmentFormats = &colorFmt,
-    .depthAttachmentFormat   = depthFmt,
+    .pColorAttachmentFormats = &sc.colorFormat,
+    .depthAttachmentFormat   = sc.depthFormat,
   };
 
   // Create the Graphics Pipeline

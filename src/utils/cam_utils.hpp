@@ -1,5 +1,5 @@
 #pragma once
-#include "camera.hpp"
+#include "components/camera.hpp"
 #include "transform.hpp"
 #include <glm/glm.hpp>
 

@@ -7,17 +7,16 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
 #include "temp_systems/ow_overlay.hpp"
-#include "temp_systems/fps_limiter.hpp"
 
 #include <entt/entt.hpp>
 #include "core/settings.hpp"
 #include "core/app.hpp"
 #include "components/transform.hpp"
 #include "systems/input.hpp"
+#include "systems/frame_pacer.hpp"
 #include "components/input.hpp"
 #include "systems/camera.hpp"
 #include "components/camera.hpp"
-#include "utils/cam_utils.hpp"
 #include "systems/player_movement.hpp"
 
 #include "renderer/context.hpp"
@@ -25,6 +24,10 @@
 #include "renderer/frame.hpp"
 #include "renderer/resources.hpp"
 #include "renderer/pipeline.hpp"
+#include "components/window.hpp"
+
+#include "components/tags.hpp"
+#include "core/frame_pacer_state.hpp"
 
 // ========================================
 // Structs and Buffers
@@ -40,12 +43,15 @@ int run(int argc, char* argv[], entt::registry& registry, entt::entity playerEnt
   auto& fs       = registry.ctx().get<FrameState>();
   auto& res      = registry.ctx().get<SceneResources>();
   auto& ps       = registry.ctx().get<PipelineState>();
-  settings       = parseArgs(argc, argv);
 
   chk(SDL_Init(SDL_INIT_VIDEO));
 
-  SDL_Window* window = SDL_CreateWindow("KitsuneEngine", 1600u, 900u, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
-  assert(window);
+  auto& window = registry.ctx().emplace<WindowContext>(WindowContext{
+      .window = SDL_CreateWindow("Kitsune", 1600, 900, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE),
+      .width  = 1600,
+      .height = 900,
+  });
+  assert(window.window != nullptr);
 
   chk(SDL_Vulkan_LoadLibrary(NULL));
   volkInitialize();
@@ -55,17 +61,26 @@ int run(int argc, char* argv[], entt::registry& registry, entt::entity playerEnt
 
   renderer::initContext(ctx, window);
   renderer::initSwapchain(sc, ctx, window, settings.fullscreen);
-  renderer::initFrameState(fs, ctx, sc.images.size());
-  auto textureDescriptors = renderer::initSceneResources(res, ctx, fs.framesInFlight);
-  renderer::initPipeline(ps, ctx, sc.colorFormat, sc.depthFormat, textureDescriptors);
+  renderer::initFrameState(fs, ctx, sc);
+  renderer::initSceneResources(res, ctx, fs);
+  renderer::initPipeline(ps, ctx, sc, res);
+
+  registry.emplace_or_replace<DirtyCameraProjection>(playerEntity);  // Calculate ProjectionMatrix for first frame
+  registry.emplace_or_replace<DirtyCameraTransform>(playerEntity);   // Calculate WorldMatrix for first frame
+
+  for(auto i = 0; i < 3; i++)
+  {
+    auto instancePos        = glm::vec3((float)(i - 1) * 3.0f, 0.0f, 0.0f);
+    res.shaderData.model[i] = glm::translate(glm::mat4(1.0f), instancePos);  // static, no rotation
+  }
 
   // Initialize the ImGui overlay
-  ow_overlay::init(window, ctx.instance, ctx.physicalDevice, ctx.device, ctx.queue, ctx.queueFamily, static_cast<uint32_t>(sc.images.size()), sc.colorFormat,
-                   ps.descPool, sc.swapchainCI.minImageCount);
+  ow_overlay::init(window, ctx, sc, ps);
+
 
   // ========================================
   // Render Loop
-  fps::Limiter limiter(settings.fps_max);
+  sys::frame_pacer_init(registry);
 
   while(app.running)
   {
@@ -73,10 +88,11 @@ int run(int argc, char* argv[], entt::registry& registry, entt::entity playerEnt
     chk(vkWaitForFences(ctx.device, 1, &fs.frames[fs.frameIndex].fence, true, UINT64_MAX));  // Wait for last frame GPU is working on
     chk(vkResetFences(ctx.device, 1, &fs.frames[fs.frameIndex].fence));                      // Reset for next submission
 
-    // Setup frame pacing
-    limiter.wait();
-    float elapsedTime = limiter.deltaTime();
-    float fps         = limiter.currentFPS();
+    // Setup frame pacing; sleeps remaining budget
+    sys::frame_pacer(registry);
+    const auto& fp          = registry.ctx().get<FramePacerState>();
+    float       elapsedTime = fp.deltaTime;  // includes GPU stall
+    float       fps         = fp.currentFps;
 
     if(settings.show_ui)
       ow_overlay::begin_frame();  // begin frame for ImGui
@@ -89,12 +105,12 @@ int run(int argc, char* argv[], entt::registry& registry, entt::entity playerEnt
     constexpr int maxShaderIndex = 2;
 
     sys::input(registry);
-    sys::camera(registry);
+    sys::camera(registry, sc.extent.width, sc.extent.height);
     sys::player_movement(registry, elapsedTime);
 
-    const auto& in        = registry.get<Input>(playerEntity);
-    const auto& cam       = registry.get<Camera>(playerEntity);
-    auto&       transform = registry.get<Transform>(playerEntity);
+    const auto& in = registry.get<Input>(playerEntity);
+    const auto& wm = registry.get<WorldMatrix>(playerEntity);
+    const auto& pm = registry.get<ProjectionMatrix>(playerEntity);
 
     // One-shot actions
     // TODO: Move to own system
@@ -118,18 +134,9 @@ int run(int argc, char* argv[], entt::registry& registry, entt::entity playerEnt
       res.shaderData.selected = (res.shaderData.selected < maxShaderIndex) ? res.shaderData.selected + 1 : 0;
 
     // ==== Update Shader Data ====
-    // TODO: ONLY RUN On init / swapchain resize / FOV change:
-    // Can't do till shaderData is seperate..
-    res.shaderData.projection = CamUtils::proj_matrix(cam, static_cast<float>(sc.extent.width) / static_cast<float>(sc.extent.height));
+    res.shaderData.view       = wm.matrix;
+    res.shaderData.projection = pm.matrix;
 
-    // View matrix
-    res.shaderData.view = CamUtils::view_matrix(cam, transform);
-
-    for(auto i = 0; i < 3; i++)
-    {
-      auto instancePos        = glm::vec3((float)(i - 1) * 3.0f, 0.0f, 0.0f);
-      res.shaderData.model[i] = glm::translate(glm::mat4(1.0f), instancePos);  // static, no rotation
-    }
     memcpy(res.shaderDataBuffers[fs.frameIndex].allocationInfo.pMappedData, &res.shaderData, sizeof(ShaderData));
 
     // ==== Record Command Buffer (build command buffer) ====
@@ -267,19 +274,31 @@ int run(int argc, char* argv[], entt::registry& registry, entt::entity playerEnt
     chk(vkEndCommandBuffer(cb));  // End recording to the command buffer
 
     // ==== Submit Command Buffer (submit to graphics queue) ===
-    VkPipelineStageFlags waitStages = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
     // Only one graphics queue (no compute or ray tracing)
-    VkSubmitInfo submitInfo{
-      .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-      .waitSemaphoreCount   = 1,
-      .pWaitSemaphores      = &fs.frames[fs.frameIndex].presentSem,  // wait for current frame's presentation to finish before executing
-      .pWaitDstStageMask    = &waitStages,                           // wait occurs at the color attachment output stage
-      .commandBufferCount   = 1,
-      .pCommandBuffers      = &cb,
-      .signalSemaphoreCount = 1,
-      .pSignalSemaphores    = &fs.renderSemaphores[sc.imageIndex],  // signalled by the GPU once command buffer execution has completed
+    VkSemaphoreSubmitInfo waitSemaphoreInfo{
+      .sType     = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+      .semaphore = fs.frames[fs.frameIndex].presentSem,
+      .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
     };
-    chk(vkQueueSubmit(ctx.queue, 1, &submitInfo, fs.frames[fs.frameIndex].fence));
+    VkCommandBufferSubmitInfo commandBufferInfo{
+      .sType         = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+      .commandBuffer = cb,
+    };
+    VkSemaphoreSubmitInfo signalSemaphoreInfo{
+      .sType     = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+      .semaphore = fs.renderSemaphores[sc.imageIndex],
+      .stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
+    };
+    VkSubmitInfo2 submitInfo{
+      .sType                    = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+      .waitSemaphoreInfoCount   = 1,
+      .pWaitSemaphoreInfos      = &waitSemaphoreInfo,
+      .commandBufferInfoCount   = 1,
+      .pCommandBufferInfos      = &commandBufferInfo,
+      .signalSemaphoreInfoCount = 1,
+      .pSignalSemaphoreInfos    = &signalSemaphoreInfo,
+    };
+    chk(vkQueueSubmit2(ctx.queue, 1, &submitInfo, fs.frames[fs.frameIndex].fence));
 
     fs.frameIndex = (fs.frameIndex + 1) % fs.framesInFlight;  // calculate frame index for next render loop iteration
 
@@ -315,16 +334,19 @@ int run(int argc, char* argv[], entt::registry& registry, entt::entity playerEnt
 
     if(app.resize_swapchain)
     {
-      chk(SDL_SetWindowRelativeMouseMode(window, true));
       app.resize_swapchain = false;
 
       renderer::rebuildSwapchain(sc, ctx);
+      renderer::syncFrameSemaphores(fs, ctx, sc);
+      registry.emplace_or_replace<DirtyCameraProjection>(playerEntity);  // aspect ratio changed, retag camera
     }
   }
 
   // ========================================
   // Cleaning Up
   chk(vkDeviceWaitIdle(ctx.device));  // Wait until the GPU has completed all outstanding operations
+
+  sys::frame_pacer_shutdown(registry);
 
   ow_overlay::shutdown(ctx.device);  // ImGui overlay
 

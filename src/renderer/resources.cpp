@@ -1,5 +1,6 @@
 #include "resources.hpp"
 #include "context.hpp"
+#include "frame.hpp"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
@@ -10,7 +11,7 @@
 #include <vector>
 #include "types.hpp"
 
-std::vector<VkDescriptorImageInfo> renderer::initSceneResources(SceneResources& res, const VkContext& ctx, uint32_t framesInFlight)
+void renderer::initSceneResources(SceneResources& res, const VkContext& ctx, const FrameState& fs)
 {
   // ========================================
   // Load Mesh
@@ -66,7 +67,7 @@ std::vector<VkDescriptorImageInfo> renderer::initSceneResources(SceneResources& 
 
   // ========================================
   // Shader Data Buffers (one per frame-in-flight)
-  for(int i = 0; i < framesInFlight; i++)
+  for(uint32_t i = 0; i < fs.framesInFlight; i++)
   {
     VkBufferCreateInfo uBufferCI{
       .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -213,12 +214,16 @@ std::vector<VkDescriptorImageInfo> renderer::initSceneResources(SceneResources& 
     vkCmdPipelineBarrier2(cb, &depInfo);
 
     chk(vkEndCommandBuffer(cb));
-    VkSubmitInfo submitInfo{
-      .sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-      .commandBufferCount = 1,
-      .pCommandBuffers    = &cb,
+    VkCommandBufferSubmitInfo commandBufferInfo{
+      .sType         = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+      .commandBuffer = cb,
     };
-    chk(vkQueueSubmit(ctx.queue, 1, &submitInfo, fence));
+    VkSubmitInfo2 submitInfo{
+      .sType                  = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+      .commandBufferInfoCount = 1,
+      .pCommandBufferInfos    = &commandBufferInfo,
+    };
+    chk(vkQueueSubmit2(ctx.queue, 1, &submitInfo, fence));
     chk(vkWaitForFences(ctx.device, 1, &fence, VK_TRUE, UINT64_MAX));
     vkDestroyFence(ctx.device, fence, nullptr);
     vkFreeCommandBuffers(ctx.device, ctx.commandPool, 1, &cb);
@@ -247,7 +252,7 @@ std::vector<VkDescriptorImageInfo> renderer::initSceneResources(SceneResources& 
     });
   }
 
-  return textureDescriptors;
+  res.textureDescriptors = textureDescriptors;
 }
 
 void renderer::destroySceneResources(SceneResources& res, const VkContext& ctx)

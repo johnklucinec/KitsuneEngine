@@ -21,6 +21,10 @@
 #include <imgui_impl_sdl3.h>
 #include <SDL3/SDL.h>
 
+#include "renderer/context.hpp"
+#include "renderer/swapchain.hpp"
+#include "renderer/pipeline.hpp"
+
 namespace ow_overlay {
 
 inline constexpr float crosshairLen   = 8.0f;
@@ -35,7 +39,7 @@ struct FrameData
   bool  fullscreen_exclusive;
 };
 
-inline void init(SDL_Window* window, VkInstance instance, VkPhysicalDevice physDevice, VkDevice device, VkQueue queue, uint32_t queueFamily, uint32_t imageCount, VkFormat imageFormat, VkDescriptorPool pool, uint32_t minImageCount) noexcept
+inline void init(SDL_Window* window, const VkContext& ctx, const SwapchainState& sc, const PipelineState& ps) noexcept
 {
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
@@ -54,28 +58,29 @@ inline void init(SDL_Window* window, VkInstance instance, VkPhysicalDevice physD
   ImGui_ImplSDL3_InitForVulkan(window);
 
   ImGui_ImplVulkan_InitInfo vi{};
-  vi.Instance            = instance;
-  vi.PhysicalDevice      = physDevice;
-  vi.Device              = device;
-  vi.QueueFamily         = queueFamily;
-  vi.Queue               = queue;
-  vi.MinImageCount       = minImageCount;
-  vi.ImageCount          = imageCount;
+  vi.Instance            = ctx.instance;
+  vi.PhysicalDevice      = ctx.physicalDevice;
+  vi.Device              = ctx.device;
+  vi.QueueFamily         = ctx.queueFamily;
+  vi.Queue               = ctx.queue;
+  vi.MinImageCount       = sc.swapchainCI.minImageCount;
+  vi.ImageCount          = static_cast<uint32_t>(sc.images.size());
   vi.ApiVersion          = VK_API_VERSION_1_4;
-  vi.DescriptorPool      = pool;
+  vi.DescriptorPool      = ps.descPool;
   vi.UseDynamicRendering = true;
 
   vi.PipelineInfoMain.MSAASamples                 = VK_SAMPLE_COUNT_1_BIT;
   vi.PipelineInfoMain.PipelineRenderingCreateInfo = {
     .sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
     .colorAttachmentCount    = 1,
-    .pColorAttachmentFormats = &imageFormat,
+    .pColorAttachmentFormats = &sc.colorFormat,
     .depthAttachmentFormat   = VK_FORMAT_UNDEFINED,
     .stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
   };
 
   ImGui_ImplVulkan_Init(&vi);
 }
+
 
 inline void shutdown(VkDevice device) noexcept
 {

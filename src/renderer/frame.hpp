@@ -6,6 +6,7 @@
 #include "common.hpp"
 
 struct VkContext;
+struct SwapchainState;
 
 struct FrameData
 {
@@ -24,6 +25,7 @@ struct FrameState
 };
 
 namespace renderer {
-void initFrameState(FrameState& fs, const VkContext& ctx, uint32_t swapchainImageCount);
+void initFrameState(FrameState& fs, const VkContext& ctx, const SwapchainState& sc);
+void syncFrameSemaphores(FrameState& fs, const VkContext& ctx, const SwapchainState& sc);
 void destroyFrameState(FrameState& fs, const VkContext& ctx);
 }  // namespace renderer

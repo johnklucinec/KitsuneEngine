@@ -1,8 +1,9 @@
 #pragma once
 #include <vulkan/vulkan.h>
-#include <span>
 
 struct VkContext;
+struct SwapchainState;
+struct SceneResources;
 
 struct PipelineState
 {
@@ -14,6 +15,6 @@ struct PipelineState
 };
 
 namespace renderer {
-void initPipeline(PipelineState& ps, const VkContext& ctx, VkFormat colorFmt, VkFormat depthFmt, std::span<const VkDescriptorImageInfo> textures);
+void initPipeline(PipelineState& ps, const VkContext& ctx, const SwapchainState& sc, const SceneResources& res);
 void destroyPipeline(PipelineState& ps, const VkContext& ctx);
 }  // namespace renderer

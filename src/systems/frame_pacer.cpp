@@ -1,82 +1,83 @@
-// #include "frame_pacer.hpp"
-// #include "../core/frame_pacer_state.hpp"
-// #include "../core/settings.hpp"
-// #include "../utils/frame_pacer_utils.hpp"
+#include "frame_pacer.hpp"
 
-// #pragma comment(lib, "winmm.lib")
-// #include <mmsystem.h>
+#include "core/frame_pacer_state.hpp"
+#include "core/settings.hpp"
+#include "utils/frame_pacer_utils.hpp"
 
-// namespace sys {
+#pragma comment(lib, "winmm.lib")
+#include <mmsystem.h>
 
-// void frame_pacer_init(entt::registry& reg)
-// {
-//   auto& state = reg.ctx().emplace<FramePacerState>();
-//   auto& cfg   = reg.ctx().get<Settings>();
+namespace sys {
 
-//   // Acquire a high-resolution waitable timer (Win10 1803+).
-//   state.timerHandle = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+void frame_pacer_init(entt::registry& reg)
+{
+  auto& state = reg.ctx().emplace<FramePacerState>();
+  auto& cfg   = reg.ctx().get<Settings>();
 
-//   // Lower the OS scheduler granularity to its hardware minimum.
-//   TIMECAPS caps{};
-//   timeGetDevCaps(&caps, sizeof caps);
-//   timeBeginPeriod(caps.wPeriodMin);
-//   state.schedulerPeriodMs = static_cast<int>(caps.wPeriodMin);
+  // Acquire a high-resolution waitable timer (Win10 1803+).
+  state.timerHandle = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
 
-//   // Elevate this thread so OS preemption doesn't introduce drift.
-//   SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+  // Lower the OS scheduler granularity to its hardware minimum.
+  TIMECAPS caps{};
+  timeGetDevCaps(&caps, sizeof caps);
+  timeBeginPeriod(caps.wPeriodMin);
+  state.schedulerPeriodMs = static_cast<int>(caps.wPeriodMin);
 
-//   // Seed timing from current settings.
-//   state.frameDuration = utils::fp_to_duration(static_cast<double>(cfg.fps_max));
-//   const auto now      = FramePacerState::Clock::now();
-//   state.deadline      = now + state.frameDuration;
-//   state.lastWake      = now;
-// }
+  // Elevate this thread so OS preemption doesn't introduce drift.
+  SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
 
-// void frame_pacer(entt::registry& reg)
-// {
-//   auto& state = reg.ctx().get<FramePacerState>();
-//   auto& cfg   = reg.ctx().get<Settings>();
+  // Seed timing from current settings.
+  state.frameDuration = utils::fp_to_duration(static_cast<double>(cfg.fps_max));
+  const auto now      = FramePacerState::Clock::now();
+  state.deadline      = now + state.frameDuration;
+  state.lastWake      = now;
+}
 
-//   // Hot-reload: sync frame duration if fps_max changed at runtime.
-//   const auto wantedDuration = utils::fp_to_duration(static_cast<double>(cfg.fps_max));
-//   if(wantedDuration != state.frameDuration)
-//     state.frameDuration = wantedDuration;
+void frame_pacer(entt::registry& reg)
+{
+  auto& state = reg.ctx().get<FramePacerState>();
+  auto& cfg   = reg.ctx().get<Settings>();
 
-//   // Sleep until the next deadline (no-op when frameDuration == zero).
-//   if(state.frameDuration != FramePacerState::Duration::zero())
-//     utils::fp_sleep_until(state.deadline, state);
+  // Hot-reload: sync frame duration if fps_max changed at runtime.
+  const auto wantedDuration = utils::fp_to_duration(static_cast<double>(cfg.fps_max));
+  if(wantedDuration != state.frameDuration)
+    state.frameDuration = wantedDuration;
 
-//   // Capture actual wake-up time and update delta metrics.
-//   const auto now   = FramePacerState::Clock::now();
-//   state.deltaUs    = std::chrono::duration_cast<std::chrono::microseconds>(now - state.lastWake).count();
-//   state.deltaTime  = static_cast<float>(state.deltaUs) * 1e-6f;
-//   state.currentFps = state.deltaUs > 0 ? 1e6f / static_cast<float>(state.deltaUs) : 0.0f;
-//   state.lastWake   = now;
+  // Sleep until the next deadline (no-op when frameDuration == zero).
+  if(state.frameDuration != FramePacerState::Duration::zero())
+    utils::fp_sleep_until(state.deadline, state);
 
-//   // Advance deadline; reset if we're more than 4 frames behind
-//   // (e.g. after a debugger pause or system stall) to avoid a catch-up storm.
-//   if(state.frameDuration != FramePacerState::Duration::zero())
-//   {
-//     state.deadline += state.frameDuration;
-//     if(state.deadline < now - state.frameDuration * 4)
-//       state.deadline = now + state.frameDuration;
-//   }
-// }
+  // Capture actual wake-up time and update delta metrics.
+  const auto now   = FramePacerState::Clock::now();
+  state.deltaUs    = std::chrono::duration_cast<std::chrono::microseconds>(now - state.lastWake).count();
+  state.deltaTime  = static_cast<float>(state.deltaUs) * 1e-6f;
+  state.currentFps = state.deltaUs > 0 ? 1e6f / static_cast<float>(state.deltaUs) : 0.0f;
+  state.lastWake   = now;
 
-// void frame_pacer_shutdown(entt::registry& reg)
-// {
-//   auto& state = reg.ctx().get<FramePacerState>();
+  // Advance deadline; reset if we're more than 4 frames behind
+  // (e.g. after a debugger pause or system stall) to avoid a catch-up storm.
+  if(state.frameDuration != FramePacerState::Duration::zero())
+  {
+    state.deadline += state.frameDuration;
+    if(state.deadline < now - state.frameDuration * 4)
+      state.deadline = now + state.frameDuration;
+  }
+}
 
-//   if(state.timerHandle)
-//   {
-//     CloseHandle(state.timerHandle);
-//     state.timerHandle = nullptr;
-//   }
+void frame_pacer_shutdown(entt::registry& reg)
+{
+  auto& state = reg.ctx().get<FramePacerState>();
 
-//   // Restore default scheduler period.
-//   TIMECAPS caps{};
-//   timeGetDevCaps(&caps, sizeof caps);
-//   timeEndPeriod(caps.wPeriodMin);
-// }
+  if(state.timerHandle)
+  {
+    CloseHandle(state.timerHandle);
+    state.timerHandle = nullptr;
+  }
 
-// }  // namespace sys
+  // Restore default scheduler period.
+  TIMECAPS caps{};
+  timeGetDevCaps(&caps, sizeof caps);
+  timeEndPeriod(caps.wPeriodMin);
+}
+
+}  // namespace sys

@@ -160,6 +160,9 @@ target_link_libraries(${NAME} PRIVATE
     ${Slang_LIBRARY}
     imgui
     EnTT::EnTT)
+if(WIN32)
+    target_link_libraries(${NAME} PRIVATE winmm)
+endif()
 if(NOT WIN32)
     target_link_libraries(${NAME} PRIVATE glm::glm-header-only)
 endif()

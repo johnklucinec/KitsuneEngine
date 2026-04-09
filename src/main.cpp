@@ -20,16 +20,23 @@ int main(int argc, char* argv[])
   registry.ctx().emplace<PipelineState>();
 
   // App config
-  registry.ctx().emplace<Settings>();
+  registry.ctx().emplace<Settings>(parseArgs(argc, argv));
   registry.ctx().emplace<AppState>();
+  const auto& settings = registry.ctx().get<Settings>();
 
-  // // Player entity
+  Camera camera{};
+  camera.fov         = settings.fov;
+  camera.sensitivity = settings.sensitivity;
+
+  // Player entity
   const entt::entity player = registry.create();
   registry.emplace<Input>(player);
   registry.emplace<Transform>(player, glm::vec3{ 0.f, 0.f, -6.f }, glm::quat{}, glm::vec3{ 1.f });
-  registry.emplace<Camera>(player, Camera{ .fov = 90.f });
+  registry.emplace<Camera>(player, camera);
   registry.emplace<Velocity>(player);
   registry.emplace<PlayerMovement>(player);  // uses PC_BASE_SPEED defaults
+  registry.emplace<WorldMatrix>(player);
+  registry.emplace<ProjectionMatrix>(player);
 
   return run(argc, argv, registry, player);
   // your game loop will go here

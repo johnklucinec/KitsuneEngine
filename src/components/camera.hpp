@@ -18,3 +18,8 @@ struct Camera
   double pitch_rad{ 0.0 };
   float  sensitivity{ 2.70f };  // OW2 slider range (0.01–100)
 };
+
+struct ProjectionMatrix
+{
+  glm::mat4 matrix{ 1.f };  // computed by camera, read by render
+};

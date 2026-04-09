@@ -1,10 +1,25 @@
 #include "frame.hpp"
 #include "context.hpp"
 #include "common.hpp"
+#include "swapchain.hpp"
 
 namespace renderer {
 
-void initFrameState(FrameState& fs, const VkContext& ctx, uint32_t swapchainImageCount)
+void syncFrameSemaphores(FrameState& fs, const VkContext& ctx, const SwapchainState& sc)
+{
+  VkSemaphoreCreateInfo semaphoreCI{
+    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+  };
+
+  for(auto& sem : fs.renderSemaphores)
+    vkDestroySemaphore(ctx.device, sem, nullptr);
+
+  fs.renderSemaphores.resize(sc.images.size());
+  for(auto& sem : fs.renderSemaphores)
+    chk(vkCreateSemaphore(ctx.device, &semaphoreCI, nullptr, &sem));
+}
+
+void initFrameState(FrameState& fs, const VkContext& ctx, const SwapchainState& sc)
 {
   // ========================================
   // Synchronization Objects
@@ -36,9 +51,7 @@ void initFrameState(FrameState& fs, const VkContext& ctx, uint32_t swapchainImag
   }
 
   // Per-swapchain-image: one render semaphore each
-  fs.renderSemaphores.resize(swapchainImageCount);
-  for(auto& sem : fs.renderSemaphores)
-    chk(vkCreateSemaphore(ctx.device, &semaphoreCI, nullptr, &sem));
+  syncFrameSemaphores(fs, ctx, sc);
 }
 
 void destroyFrameState(FrameState& fs, const VkContext& ctx)

@@ -4,6 +4,7 @@
 #include "components/transform.hpp"
 #include "components/velocity.hpp"
 #include "systems/player_movement.hpp"
+#include "tags.hpp"
 
 #include <glm/glm.hpp>
 #include <cmath>
@@ -11,7 +12,7 @@
 void sys::player_movement(entt::registry& reg, float dt)
 {
   reg.view<Transform, Velocity, const PlayerMovement, const Camera, const Input>().each(
-      [dt](Transform& transform, Velocity& vel, const PlayerMovement& pc, const Camera& cam, const Input& input) {
+      [&reg, dt](entt::entity e, Transform& transform, Velocity& vel, const PlayerMovement& pc, const Camera& cam, const Input& input) {
         // Build local-space wish vector (right, forward)
         const float side   = (key_down(input, Key::A) ? 1.0f : 0.0f) - (key_down(input, Key::D) ? 1.0f : 0.0f);
         const float fwd    = (key_down(input, Key::W) ? 1.0f : 0.0f) - (key_down(input, Key::S) ? 1.0f : 0.0f);
@@ -53,5 +54,7 @@ void sys::player_movement(entt::registry& reg, float dt)
 
         // Integrate into world position
         transform.position += vel.linear * dt;
+
+        reg.emplace_or_replace<DirtyCameraTransform>(e); // Recalculate ProjectionMatrix
       });
 }

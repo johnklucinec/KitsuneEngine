@@ -9,6 +9,7 @@
 #include "common.hpp"
 
 struct VkContext;
+struct FrameState;
 
 struct ShaderData  // Look into scalarBlockLayout
 {
@@ -44,11 +45,11 @@ struct SceneResources
   ShaderData                                         shaderData{};
   std::array<ShaderDataBuffer, MAX_FRAMES_IN_FLIGHT> shaderDataBuffers;
   std::array<Texture, 3>                             textures{};
+  std::vector<VkDescriptorImageInfo>                 textureDescriptors;
   Slang::ComPtr<slang::IGlobalSession>               slangSession;
 };
 
 namespace renderer {
-// Returns texture descriptors needed by initPipeline
-std::vector<VkDescriptorImageInfo> initSceneResources(SceneResources& res, const VkContext& ctx, uint32_t framesInFlight);
-void                               destroySceneResources(SceneResources& res, const VkContext& ctx);
+void initSceneResources(SceneResources& res, const VkContext& ctx, const FrameState& fs);
+void destroySceneResources(SceneResources& res, const VkContext& ctx);
 }  // namespace renderer
