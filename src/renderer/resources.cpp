@@ -11,6 +11,8 @@
 #include <vector>
 #include "types.hpp"
 
+#include "../assets/shaders/shader_constants.h"
+
 void renderer::initSceneResources(SceneResources& res, const VkContext& ctx, const FrameState& fs)
 {
   // ========================================
@@ -94,8 +96,8 @@ void renderer::initSceneResources(SceneResources& res, const VkContext& ctx, con
   for(int i = 0; i < static_cast<int>(res.textures.size()); i++)
   {
     ktxTexture* ktxTex{ nullptr };
-    std::string filename = "assets/models/suzanne" + std::to_string(i) + ".ktx";
-    ktxTexture_CreateFromNamedFile(filename.c_str(), KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &ktxTex);
+    std::string filename = "assets/models/suzanne" + std::to_string(i % 3) + ".ktx";  //TODO: Remove % 3 when I dont use INSTANCE_COUNT
+    chk(ktxTexture_CreateFromNamedFile(filename.c_str(), KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &ktxTex));
 
     // Create image
     VkImageCreateInfo texImgCI{

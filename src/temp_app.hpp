@@ -27,31 +27,26 @@
 #include "components/window.hpp"
 
 #include "components/tags.hpp"
-#include "core/frame_pacer_state.hpp"
+#include "components/frame_pacer.hpp"
 
-// ========================================
-// Structs and Buffers
-
-Settings parseArgs(int argc, char* argv[]);
-
-int run(int argc, char* argv[], entt::registry& registry, entt::entity playerEntity)
+int run(entt::registry& registry)
 {
   auto& app      = registry.ctx().get<AppState>();
   auto& settings = registry.ctx().get<Settings>();
-  auto& ctx      = registry.ctx().get<VkContext>();
-  auto& sc       = registry.ctx().get<SwapchainState>();
-  auto& fs       = registry.ctx().get<FrameState>();
-  auto& res      = registry.ctx().get<SceneResources>();
-  auto& ps       = registry.ctx().get<PipelineState>();
+
+  // Renderer contexts
+  auto& ctx = registry.ctx().emplace<VkContext>();
+  auto& sc  = registry.ctx().emplace<SwapchainState>();
+  auto& fs  = registry.ctx().emplace<FrameState>();
+  auto& res = registry.ctx().emplace<SceneResources>();
+  auto& ps  = registry.ctx().emplace<PipelineState>();
 
   chk(SDL_Init(SDL_INIT_VIDEO));
+  SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, "0");  // ignore OS accel
 
-  auto& window = registry.ctx().emplace<WindowContext>(WindowContext{
-      .window = SDL_CreateWindow("Kitsune", 1600, 900, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE),
-      .width  = 1600,
-      .height = 900,
-  });
+  auto& window = registry.ctx().emplace<WindowContext>("Kitsune", SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
   assert(window.window != nullptr);
+  SDL_SetWindowRelativeMouseMode(window, true);  // enable raw input
 
   chk(SDL_Vulkan_LoadLibrary(NULL));
   volkInitialize();
@@ -65,18 +60,28 @@ int run(int argc, char* argv[], entt::registry& registry, entt::entity playerEnt
   renderer::initSceneResources(res, ctx, fs);
   renderer::initPipeline(ps, ctx, sc, res);
 
-  registry.emplace_or_replace<DirtyCameraProjection>(playerEntity);  // Calculate ProjectionMatrix for first frame
-  registry.emplace_or_replace<DirtyCameraTransform>(playerEntity);   // Calculate WorldMatrix for first frame
+  // Mark player for camera initialization
+  auto playerView = registry.view<PlayerTag>();
+  for(auto player : playerView)
+  {
+    registry.emplace_or_replace<DirtyCameraProjection>(player);  // Calculate ProjectionMatrix for first frame
+    registry.emplace_or_replace<DirtyCameraTransform>(player);   // Calculate WorldMatrix for first frame
+  }
 
-  for(auto i = 0; i < 3; i++)
+  for(auto i = 0; i < INSTANCE_COUNT; i++)
   {
     auto instancePos        = glm::vec3((float)(i - 1) * 3.0f, 0.0f, 0.0f);
     res.shaderData.model[i] = glm::translate(glm::mat4(1.0f), instancePos);  // static, no rotation
   }
 
+  for(uint32_t i = 0; i < fs.framesInFlight; i++)
+    memcpy(res.shaderDataBuffers[i].allocationInfo.pMappedData, &res.shaderData, sizeof(ShaderData));
+
+  entt::entity playerEntity = registry.view<PlayerTag>().front();
+  assert(playerEntity != entt::null);
+
   // Initialize the ImGui overlay
   ow_overlay::init(window, ctx, sc, ps);
-
 
   // ========================================
   // Render Loop
@@ -88,55 +93,27 @@ int run(int argc, char* argv[], entt::registry& registry, entt::entity playerEnt
     chk(vkWaitForFences(ctx.device, 1, &fs.frames[fs.frameIndex].fence, true, UINT64_MAX));  // Wait for last frame GPU is working on
     chk(vkResetFences(ctx.device, 1, &fs.frames[fs.frameIndex].fence));                      // Reset for next submission
 
-    // Setup frame pacing; sleeps remaining budget
-    sys::frame_pacer(registry);
-    const auto& fp          = registry.ctx().get<FramePacerState>();
-    float       elapsedTime = fp.deltaTime;  // includes GPU stall
-    float       fps         = fp.currentFps;
-
     if(settings.show_ui)
       ow_overlay::begin_frame();  // begin frame for ImGui
+
+    // Setup frame pacing; sleeps remaining budget
+    sys::frame_pacer(registry);
+    const auto& fp = registry.ctx().get<FramePacerState>();
 
     // ==== Aquire Next Image ====
     if(chkSwapchain(vkAcquireNextImageKHR(ctx.device, sc.swapchain, UINT64_MAX, fs.frames[fs.frameIndex].presentSem, VK_NULL_HANDLE, &sc.imageIndex)))
       app.resize_swapchain = true;
 
     // === Polling Events ===
-    constexpr int maxShaderIndex = 2;
-
     sys::input(registry);
     sys::camera(registry, sc.extent.width, sc.extent.height);
-    sys::player_movement(registry, elapsedTime);
-
-    const auto& in = registry.get<Input>(playerEntity);
-    const auto& wm = registry.get<WorldMatrix>(playerEntity);
-    const auto& pm = registry.get<ProjectionMatrix>(playerEntity);
-
-    // One-shot actions
-    // TODO: Move to own system
-    if(key_just_pressed(in, Key::Escape))
-      app.running = false;
-
-    if(key_down(in, Key::LAlt) && key_just_pressed(in, Key::Return))
-    {
-      settings.fullscreen  = !settings.fullscreen;
-      sc.needsFullscreen   = true;
-      app.resize_swapchain = true;
-    }
-
-    if(key_down(in, Key::LAlt) && key_just_pressed(in, Key::Z))
-      settings.show_ui = !settings.show_ui;
-
-    if(key_just_pressed(in, Key::ArrowLeft))
-      res.shaderData.selected = (res.shaderData.selected > 0) ? res.shaderData.selected - 1 : maxShaderIndex;
-
-    if(key_just_pressed(in, Key::ArrowRight))
-      res.shaderData.selected = (res.shaderData.selected < maxShaderIndex) ? res.shaderData.selected + 1 : 0;
+    sys::player_movement(registry, fp.deltaTime);
 
     // ==== Update Shader Data ====
-    res.shaderData.view       = wm.matrix;
-    res.shaderData.projection = pm.matrix;
-
+    const auto& world         = registry.get<WorldMatrix>(playerEntity);
+    const auto& proj          = registry.get<ProjectionMatrix>(playerEntity);
+    res.shaderData.view       = world.matrix;
+    res.shaderData.projection = proj.matrix;
     memcpy(res.shaderDataBuffers[fs.frameIndex].allocationInfo.pMappedData, &res.shaderData, sizeof(ShaderData));
 
     // ==== Record Command Buffer (build command buffer) ====
@@ -236,13 +213,13 @@ int run(int argc, char* argv[], entt::registry& registry, entt::entity playerEnt
     vkCmdPushConstants(cb, ps.layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress), &res.shaderDataBuffers[fs.frameIndex].deviceAddress);
 
     // Draw mesh
-    vkCmdDrawIndexed(cb, res.indexCount, 3, 0, 0, 0);  // commandBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstanceID
+    vkCmdDrawIndexed(cb, res.indexCount, INSTANCE_COUNT, 0, 0, 0);  // commandBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstanceID
 
     // Build ImGui HUD
     if(settings.show_ui)
     {
       ow_overlay::FrameData fd{
-        .fps                  = fps,
+        .fps                  = fp.currentFps,
         .frames_in_flight     = (int)fs.framesInFlight,
         .fps_limited          = settings.fps_max != 0,
         .fullscreen_exclusive = settings.fullscreen,
@@ -314,6 +291,22 @@ int run(int argc, char* argv[], entt::registry& registry, entt::entity playerEnt
     if(chkSwapchain(vkQueuePresentKHR(ctx.queue, &presentInfo)))
       app.resize_swapchain = true;
 
+    // One-shot actions TODO: Move to own system
+    const auto& in = registry.get<Input>(playerEntity);
+    if(key_just_pressed(in, Key::Escape))
+      app.running = false;
+
+    if(key_down(in, Key::LAlt) && key_just_pressed(in, Key::Return))
+    {
+      settings.fullscreen  = !settings.fullscreen;
+      sc.needsFullscreen   = true;
+      app.resize_swapchain = true;
+    }
+
+    if(key_down(in, Key::LAlt) && key_just_pressed(in, Key::Z))
+      settings.show_ui = !settings.show_ui;
+
+
     if(sc.needsFullscreen)
     {
       if(settings.fullscreen)
@@ -338,7 +331,7 @@ int run(int argc, char* argv[], entt::registry& registry, entt::entity playerEnt
 
       renderer::rebuildSwapchain(sc, ctx);
       renderer::syncFrameSemaphores(fs, ctx, sc);
-      registry.emplace_or_replace<DirtyCameraProjection>(playerEntity);  // aspect ratio changed, retag camera
+      registry.emplace_or_replace<DirtyCameraProjection>(playerEntity);
     }
   }
 

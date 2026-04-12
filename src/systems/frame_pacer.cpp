@@ -1,6 +1,6 @@
 #include "frame_pacer.hpp"
 
-#include "core/frame_pacer_state.hpp"
+#include "components/frame_pacer.hpp"
 #include "core/settings.hpp"
 #include "utils/frame_pacer_utils.hpp"
 

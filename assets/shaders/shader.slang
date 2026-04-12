@@ -1,3 +1,5 @@
+#include "shader_constants.h"
+
 struct VSInput
 {
   float3 Pos;
@@ -11,9 +13,8 @@ struct ShaderData
 {
   float4x4 projection;
   float4x4 view;
-  float4x4 model[3];
+  float4x4 model[INSTANCE_COUNT];
   float4   lightPos;
-  uint32_t selected;
 };
 
 struct VSOutput
@@ -21,7 +22,6 @@ struct VSOutput
   float4   Pos : SV_POSITION;
   float3   Normal;
   float2   UV;
-  float3   Factor;
   float3   LightVec;
   float3   ViewVec;
   uint32_t InstanceIndex;
@@ -36,7 +36,6 @@ VSOutput main(VSInput input, uniform ShaderData* shaderData, uint instanceIndex:
   output.Normal        = mul((float3x3)mul(shaderData->view, modelMat), input.Normal);
   output.UV            = input.UV;
   output.Pos           = mul(shaderData->projection, mul(shaderData->view, mul(modelMat, float4(input.Pos.xyz, 1.0))));
-  output.Factor        = (shaderData->selected == instanceIndex ? 4.0f : 1.0f);
   output.InstanceIndex = instanceIndex;
 
   // Calculate view vectors required for lighting
@@ -93,7 +92,7 @@ float4 main(VSOutput input)
   float specular = (F * G * D) / (4.0 * NdotL * NdotV + 1e-5);
 
   // Material sampling and final color
-  float3 texColor   = textures[NonUniformResourceIndex(input.InstanceIndex)].Sample(input.UV).rgb * input.Factor;
+  float3 texColor   = textures[NonUniformResourceIndex(input.InstanceIndex)].Sample(input.UV).rgb;
   float3 finalColor = diffuse * texColor + specular;
 
   return float4(finalColor, 1.0);

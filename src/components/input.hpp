@@ -6,7 +6,7 @@
 // mouse_delta is zeroed at the start of each tick before accumulating events.
 struct Input
 {
-  glm::vec2 mouse_delta{ 0.0f };  // raw OS counts (SDL xrel / yrel)
+  glm::dvec2 mouse_delta{ 0.0f };  // raw OS counts (SDL xrel / yrel)
   uint32_t  mouse_buttons{ 0 };   // bitmask — see MouseBtn::
   uint64_t  keys{ 0 };            // current held state  — see Key::
   uint64_t  keys_prev{ 0 };       // held state last tick. Used for just_pressed/released

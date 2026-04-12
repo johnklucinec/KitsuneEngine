@@ -22,8 +22,8 @@ void sys::camera(entt::registry& reg, uint32_t vp_width, uint32_t vp_height)
 
     const double sens = static_cast<double>(cam.sensitivity);
 
-    cam.yaw_rad += static_cast<double>(in.mouse_delta.x) * K_YAW * sens;
-    cam.pitch_rad += static_cast<double>(in.mouse_delta.y) * K_PITCH * sens;
+    cam.yaw_rad += in.mouse_delta.x * K_YAW * sens;
+    cam.pitch_rad += in.mouse_delta.y * K_PITCH * sens;
     cam.pitch_rad = std::clamp(cam.pitch_rad, -CAM_PITCH_LIMIT, CAM_PITCH_LIMIT);
 
     const glm::quat yaw_q   = glm::angleAxis(static_cast<float>(cam.yaw_rad), glm::vec3{ 0.0f, 1.0f, 0.0f });

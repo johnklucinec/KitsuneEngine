@@ -8,6 +8,8 @@
 #include <array>
 #include "common.hpp"
 
+#include "../assets/shaders/shader_constants.h"  // TODO: TEMPORARY IDEA
+
 struct VkContext;
 struct FrameState;
 
@@ -15,9 +17,8 @@ struct ShaderData  // Look into scalarBlockLayout
 {
   glm::mat4 projection;
   glm::mat4 view;
-  glm::mat4 model[3];
+  glm::mat4 model[INSTANCE_COUNT];
   glm::vec4 lightPos = { 0.0f, -10.0f, 10.0f, 0.0f };
-  uint32_t  selected = 1;
 };
 
 struct ShaderDataBuffer
@@ -44,7 +45,7 @@ struct SceneResources
   VkDeviceSize                                       indexOffset  = 0;
   ShaderData                                         shaderData{};
   std::array<ShaderDataBuffer, MAX_FRAMES_IN_FLIGHT> shaderDataBuffers;
-  std::array<Texture, 3>                             textures{};
+  std::array<Texture, INSTANCE_COUNT>                textures{};
   std::vector<VkDescriptorImageInfo>                 textureDescriptors;
   Slang::ComPtr<slang::IGlobalSession>               slangSession;
 };

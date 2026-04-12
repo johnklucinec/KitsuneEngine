@@ -5,6 +5,7 @@
 #include <source_location>
 #include <iostream>
 #include <cstdlib>
+#include <ktx.h>
 
 inline constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -45,4 +46,38 @@ inline void chk(bool result, const std::source_location& loc = std::source_locat
   std::cerr << loc.file_name() << ":" << loc.line() << " [" << loc.function_name() << "] "
             << "Vulkan error (" << result << ")\n";
   std::exit(result);
+}
+
+// clang-format off
+inline const char* ktxErrStr(KTX_error_code code)
+{
+	switch(code)
+  {
+    case KTX_SUCCESS:                 	return "KTX_SUCCESS";
+    case KTX_FILE_DATA_ERROR:         	return "KTX_FILE_DATA_ERROR";
+    case KTX_FILE_OPEN_FAILED:        	return "KTX_FILE_OPEN_FAILED";
+    case KTX_FILE_OVERFLOW:           	return "KTX_FILE_OVERFLOW";
+    case KTX_FILE_READ_ERROR:         	return "KTX_FILE_READ_ERROR";
+    case KTX_FILE_SEEK_ERROR:         	return "KTX_FILE_SEEK_ERROR";
+    case KTX_FILE_UNEXPECTED_EOF:     	return "KTX_FILE_UNEXPECTED_EOF";
+    case KTX_FILE_WRITE_ERROR:        	return "KTX_FILE_WRITE_ERROR";
+    case KTX_GL_ERROR:                	return "KTX_GL_ERROR";
+    case KTX_INVALID_OPERATION:       	return "KTX_INVALID_OPERATION";
+    case KTX_INVALID_VALUE:           	return "KTX_INVALID_VALUE";
+    case KTX_NOT_FOUND:              	 	return "KTX_NOT_FOUND";
+    case KTX_OUT_OF_MEMORY:           	return "KTX_OUT_OF_MEMORY";
+    case KTX_UNKNOWN_FILE_FORMAT:     	return "KTX_UNKNOWN_FILE_FORMAT";
+    case KTX_UNSUPPORTED_TEXTURE_TYPE: 	return "KTX_UNSUPPORTED_TEXTURE_TYPE";
+    default:                          	return "KTX_UNKNOWN_ERROR";
+  }
+}  // clang-format on
+
+inline void chk(KTX_error_code result, const std::source_location& loc = std::source_location::current())
+{
+  if(result != KTX_SUCCESS) [[unlikely]]
+  {
+    std::cerr << loc.file_name() << ":" << loc.line() << " [" << loc.function_name() << "] "
+              << "KTX error: " << ktxErrStr(result) << " (" << result << ")\n";
+    std::exit(1);
+  }
 }

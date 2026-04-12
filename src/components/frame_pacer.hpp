@@ -4,7 +4,6 @@
 #include <chrono>
 #include <cstdint>
 
-// Engine-level frame pacing state: lives in entt::ctx(), never on an entity.
 struct FramePacerState
 {
   using Clock     = std::chrono::high_resolution_clock;
