@@ -6,11 +6,12 @@
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
-#include "temp_systems/ow_overlay.hpp"
+#include "systems/hud.hpp"
 
 #include <entt/entt.hpp>
 #include "core/settings.hpp"
 #include "core/app.hpp"
+#include <SDL3/SDL.h>
 #include "components/transform.hpp"
 #include "systems/input.hpp"
 #include "systems/frame_pacer.hpp"
@@ -80,12 +81,10 @@ int run(entt::registry& registry)
   entt::entity playerEntity = registry.view<PlayerTag>().front();
   assert(playerEntity != entt::null);
 
-  // Initialize the ImGui overlay
-  ow_overlay::init(window, ctx, sc, ps);
-
   // ========================================
   // Render Loop
   sys::frame_pacer_init(registry);
+  sys::hud_init(registry);
 
   while(app.running)
   {
@@ -93,8 +92,7 @@ int run(entt::registry& registry)
     chk(vkWaitForFences(ctx.device, 1, &fs.frames[fs.frameIndex].fence, true, UINT64_MAX));  // Wait for last frame GPU is working on
     chk(vkResetFences(ctx.device, 1, &fs.frames[fs.frameIndex].fence));                      // Reset for next submission
 
-    if(settings.show_ui)
-      ow_overlay::begin_frame();  // begin frame for ImGui
+    sys::hud_begin(registry);
 
     // Setup frame pacing; sleeps remaining budget
     sys::frame_pacer(registry);
@@ -215,18 +213,8 @@ int run(entt::registry& registry)
     // Draw mesh
     vkCmdDrawIndexed(cb, res.indexCount, INSTANCE_COUNT, 0, 0, 0);  // commandBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstanceID
 
-    // Build ImGui HUD
-    if(settings.show_ui)
-    {
-      ow_overlay::FrameData fd{
-        .fps                  = fp.currentFps,
-        .frames_in_flight     = (int)fs.framesInFlight,
-        .fps_limited          = settings.fps_max != 0,
-        .fullscreen_exclusive = settings.fullscreen,
-      };
-      ow_overlay::build_ui(fd);
-      ow_overlay::record_draw(cb);
-    }
+    // Build and draw HUD
+    sys::hud_draw(registry);
 
     vkCmdEndRendering(cb);  // Finish current render pass
 
@@ -341,7 +329,7 @@ int run(entt::registry& registry)
 
   sys::frame_pacer_shutdown(registry);
 
-  ow_overlay::shutdown(ctx.device);  // ImGui overlay
+  sys::hud_shutdown(registry);
 
   renderer::destroyPipeline(ps, ctx);
   renderer::destroySceneResources(res, ctx);

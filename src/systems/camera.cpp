@@ -8,6 +8,7 @@
 #include <glm/gtc/quaternion.hpp>
 #include <algorithm>
 #include <numbers>
+#include <entt/entt.hpp>
 
 void sys::camera(entt::registry& reg, uint32_t vp_width, uint32_t vp_height)
 {
