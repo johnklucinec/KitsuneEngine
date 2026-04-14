@@ -92,8 +92,6 @@ int run(entt::registry& registry)
     chk(vkWaitForFences(ctx.device, 1, &fs.frames[fs.frameIndex].fence, true, UINT64_MAX));  // Wait for last frame GPU is working on
     chk(vkResetFences(ctx.device, 1, &fs.frames[fs.frameIndex].fence));                      // Reset for next submission
 
-    sys::hud_begin(registry);
-
     // Setup frame pacing; sleeps remaining budget
     sys::frame_pacer(registry);
     const auto& fp = registry.ctx().get<FramePacerState>();

@@ -16,9 +16,6 @@ namespace sys {
 // Call after swapchain creation
 void hud_init(entt::registry& reg);
 
-// Call top of render loop, before polling
-void hud_begin(entt::registry& reg);
-
 // Call after draw calls, before vkCmdEndRendering
 // builds and draws the UI
 void hud_draw(entt::registry& reg);

@@ -15,10 +15,16 @@
 #include "renderer/frame.hpp"
 
 #include "components/window.hpp"
-#include "components/frame_pacer.hpp"
 #include "core/settings.hpp"
 
 namespace sys {
+
+// Cached HUD entity stored in context to avoid a view scan every frame
+// TODO: Move to singleton?
+struct HudEntity
+{
+  entt::entity value;
+};
 
 void hud_init(entt::registry& reg)
 {
@@ -66,11 +72,11 @@ void hud_init(entt::registry& reg)
 
   ImGui_ImplVulkan_Init(&vi);
 
-  // Spawn the single HUD entity
+  // Spawn and cache the single HUD entity
   const auto e = reg.create();
   reg.emplace<Hud>(e);
+  reg.ctx().emplace<HudEntity>(e);
 }
-
 
 inline void shutdown(VkDevice device)
 {
@@ -80,24 +86,18 @@ inline void shutdown(VkDevice device)
   ImGui::DestroyContext();
 }
 
-void hud_begin(entt::registry& reg)
-{
-  auto& settings = reg.ctx().get<Settings>();
-  if(!settings.show_ui)
-    return;
-
-  ImGui_ImplSDL3_NewFrame();
-  ImGui_ImplVulkan_NewFrame();
-  ImGui::NewFrame();
-}
-
 void hud_draw(entt::registry& reg)
 {
   auto& settings = reg.ctx().get<Settings>();
   if(!settings.show_ui)
     return;
 
-  auto& pacer = reg.ctx().get<FramePacerState>();
+  // Begin ImGui frame here
+  // TODO: Verify: called right after frame_pacer so DeltaTime includes the sleep and io.Framerate stays accurate
+  ImGui_ImplSDL3_NewFrame();
+  ImGui_ImplVulkan_NewFrame();
+  ImGui::NewFrame();
+
   auto& frame = reg.ctx().get<FrameState>();
 
   bool fps_limited = settings.fps_max != 0 || settings.vsync;
@@ -111,24 +111,25 @@ void hud_draw(entt::registry& reg)
   static constexpr const char* kDots[] = { "", ".", "..", "..." };
 
   // HUD window
-  for(auto [entity, hud] : reg.view<const Hud>().each())
-  {
-    ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiCond_Always);
-    ImGui::Begin("##hud", nullptr, kHUDFlags);
+  const auto& hudEntity = reg.ctx().get<HudEntity>();
+  (void)hudEntity;  // entity cached
 
-    const int fi = frame.framesInFlight < 0 ? 0 : frame.framesInFlight > 3 ? 3 : frame.framesInFlight;
-    ImGui::Text("FPS  %.0f %s", pacer.currentFps, kDots[fi]);
+  ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiCond_Always);
+  ImGui::Begin("##hud", nullptr, kHUDFlags);
 
-    ImGui::Text("FPS_LIM:");
-    ImGui::SameLine(0.0f, 4.0f);
-    ImGui::TextColored(fps_limited ? kGreen : kRed, fps_limited ? "ON" : "OFF");
+  // Using ImGui's built-in smoothed FPS (instead of frame_pacer.currentFps [might change back later])
+  const int fi = frame.framesInFlight < 0 ? 0 : frame.framesInFlight > 3 ? 3 : frame.framesInFlight;
+  ImGui::Text("FPS  %.0f %s", ImGui::GetIO().Framerate, kDots[fi]);
 
-    ImGui::Text("FSE:");
-    ImGui::SameLine(0.0f, 4.0f);
-    ImGui::TextColored(fullscreen ? kGreen : kRed, fullscreen ? "ON" : "OFF");
+  ImGui::Text("FPS_LIM:");
+  ImGui::SameLine(0.0f, 4.0f);
+  ImGui::TextColored(fps_limited ? kGreen : kRed, fps_limited ? "ON" : "OFF");
 
-    ImGui::End();
-  }
+  ImGui::Text("FSE:");
+  ImGui::SameLine(0.0f, 4.0f);
+  ImGui::TextColored(fullscreen ? kGreen : kRed, fullscreen ? "ON" : "OFF");
+
+  ImGui::End();
 
   // Crosshair
   const ImGuiIO&  io   = ImGui::GetIO();
