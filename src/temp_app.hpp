@@ -6,8 +6,7 @@
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
-#include "systems/hud.hpp"
-
+#include <charconv>
 #include <entt/entt.hpp>
 #include "core/settings.hpp"
 #include "core/app.hpp"
@@ -15,6 +14,7 @@
 #include "components/transform.hpp"
 #include "systems/input.hpp"
 #include "systems/frame_pacer.hpp"
+#include "systems/hud.hpp"
 #include "components/input.hpp"
 #include "systems/camera.hpp"
 #include "components/camera.hpp"
@@ -28,7 +28,7 @@
 #include "components/window.hpp"
 
 #include "components/tags.hpp"
-#include "components/frame_pacer.hpp"
+
 
 int run(entt::registry& registry)
 {
@@ -45,7 +45,7 @@ int run(entt::registry& registry)
   chk(SDL_Init(SDL_INIT_VIDEO));
   SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, "0");  // ignore OS accel
 
-  auto& window = registry.ctx().emplace<WindowContext>("Kitsune", SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+  auto& window = registry.ctx().emplace<WindowContext>("KitsuneEngine", SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
   assert(window.window != nullptr);
   SDL_SetWindowRelativeMouseMode(window, true);  // enable raw input
 
@@ -60,14 +60,6 @@ int run(entt::registry& registry)
   renderer::initFrameState(fs, ctx, sc);
   renderer::initSceneResources(res, ctx, fs);
   renderer::initPipeline(ps, ctx, sc, res);
-
-  // Mark player for camera initialization
-  auto playerView = registry.view<PlayerTag>();
-  for(auto player : playerView)
-  {
-    registry.emplace_or_replace<DirtyCameraProjection>(player);  // Calculate ProjectionMatrix for first frame
-    registry.emplace_or_replace<DirtyCameraTransform>(player);   // Calculate WorldMatrix for first frame
-  }
 
   for(auto i = 0; i < INSTANCE_COUNT; i++)
   {
@@ -94,7 +86,6 @@ int run(entt::registry& registry)
 
     // Setup frame pacing; sleeps remaining budget
     sys::frame_pacer(registry);
-    const auto& fp = registry.ctx().get<FramePacerState>();
 
     // ==== Aquire Next Image ====
     if(chkSwapchain(vkAcquireNextImageKHR(ctx.device, sc.swapchain, UINT64_MAX, fs.frames[fs.frameIndex].presentSem, VK_NULL_HANDLE, &sc.imageIndex)))
@@ -102,11 +93,11 @@ int run(entt::registry& registry)
 
     // === Polling Events ===
     sys::input(registry);
-    sys::camera(registry, sc.extent.width, sc.extent.height);
-    sys::player_movement(registry, fp.deltaTime);
+    sys::camera(registry);
+    sys::player_movement(registry);
 
     // ==== Update Shader Data ====
-    const auto& world         = registry.get<WorldMatrix>(playerEntity);
+    const auto& world         = registry.get<CameraViewMatrix>(playerEntity);
     const auto& proj          = registry.get<ProjectionMatrix>(playerEntity);
     res.shaderData.view       = world.matrix;
     res.shaderData.projection = proj.matrix;
@@ -125,28 +116,27 @@ int run(entt::registry& registry)
     // clang-format off
     std::array<VkImageMemoryBarrier2, 2> outputBarriers{
       VkImageMemoryBarrier2{
-          .sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-          .srcStageMask  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,  // pipeline stage(s) to wait on
-          .srcAccessMask = 0,                                                // memory writes to make available to the GPU
-          .dstStageMask  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,  // where and what those writes must be visible to
-          .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-          .oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED,           // dont need previous contents
-          .newLayout     = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,  // use as color attachment for rendering
-          .image         = sc.images[sc.imageIndex],
-          .subresourceRange{ .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = 1, .layerCount = 1 },
-      },
+      	.sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,	// pipeline stage(s) to wait on
+        .srcAccessMask = 0,                                        				// memory writes to make available to the GPU
+        .dstStageMask  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,	// where and what those writes must be visible to
+        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED,       		// dont need previous contents
+        .newLayout     = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,	// use as color attachment
+        .image         = sc.images[sc.imageIndex],
+        .subresourceRange{ .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = 1, .layerCount = 1 }
+    },
 
       VkImageMemoryBarrier2{
-          .sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-          .srcStageMask  = VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,   // pipeline stage(s) to wait on
-          .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,  // memory writes to make available to the GPU
-          .dstStageMask  = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,  // where and what those writes must be visible to
-          .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-          .oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED,           // dont need previous contents
-          .newLayout     = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,  // use as color attachment for rendering
-          .image         = sc.depthImage,
-          .subresourceRange{ .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT, .levelCount = 1, .layerCount = 1 },
-      }
+      	.sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask  = VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,		// pipeline stage(s) to wait on
+        .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,	// memory writes to make available to the GPU
+        .dstStageMask  = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,	// where and what those writes must be visible to
+        .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+        .oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED, 					// dont need previous contents
+        .newLayout     = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,	// use as color attachment for rendering
+        .image         = sc.depthImage,
+        .subresourceRange{ .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT, .levelCount = 1, .layerCount = 1 } }
     };  // clang-format on
     VkDependencyInfo barrierDependencyInfo{
       .sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
@@ -154,7 +144,6 @@ int run(entt::registry& registry)
       .pImageMemoryBarriers    = outputBarriers.data(),
     };
     vkCmdPipelineBarrier2(cb, &barrierDependencyInfo);  // Insert those two barriers into the current command buffer
-
 
     // Define how attachments are used: Dynamic Rendering
     VkRenderingAttachmentInfo colorAttachmentInfo{
@@ -278,7 +267,7 @@ int run(entt::registry& registry)
       app.resize_swapchain = true;
 
     // One-shot actions TODO: Move to own system
-    const auto& in = registry.get<Input>(playerEntity);
+    const auto& in = registry.ctx().get<Input>();
     if(key_just_pressed(in, Key::Escape))
       app.running = false;
 
@@ -314,9 +303,10 @@ int run(entt::registry& registry)
     if(app.resize_swapchain)
     {
       app.resize_swapchain = false;
-
       renderer::rebuildSwapchain(sc, ctx);
       renderer::syncFrameSemaphores(fs, ctx, sc);
+      window.height = sc.extent.height;
+      window.width  = sc.extent.width;
       registry.emplace_or_replace<DirtyCameraProjection>(playerEntity);
     }
   }

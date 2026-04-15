@@ -1,12 +1,14 @@
-#include "systems/input.hpp"
-#include "components/input.hpp"
+#include <entt/entt.hpp>
 #include "core/app.hpp"
 #include <SDL3/SDL.h>
+
+#include "systems/input.hpp"
+#include "components/input.hpp"
 
 namespace {
 
 [[nodiscard]]
-constexpr uint32_t to_key_bit(SDL_Scancode sc) noexcept
+constexpr uint32_t to_key_index(SDL_Scancode sc) noexcept
 {
   // clang-format off
   switch (sc)
@@ -98,61 +100,68 @@ namespace sys {
 
 void input(entt::registry& reg)
 {
-  auto& app  = reg.ctx().get<AppState>();
-  auto  view = reg.view<Input>();
+  auto& app = reg.ctx().get<AppState>();
+  auto& in  = reg.ctx().get<Input>();
 
-  //Snapshot + reset per-frame transient state
-  // keys_prev is snapshotted BEFORE new events are processed so that
-  // key_just_pressed / key_just_released reflect transitions this tick only.
-  view.each([](Input& in) {
-    in.keys_prev   = in.keys;
-    in.mouse_delta = glm::vec2{ 0.0f };
-  });
+  // Snapshot transient state before accumulating new events.
+  in.keys_prev          = in.keys;
+  in.mouse_buttons_prev = in.mouse_buttons;
+  in.mouse_delta        = { 0.0, 0.0 };
 
   // Drain the OS event queue
-  SDL_Event ev;
+  // Accumulate all pending OS events into a local struct.
+  // This avoids re-iterating components per event
+  struct FrameDelta
+  {
+    double   mouse_dx{};
+    double   mouse_dy{};
+    uint64_t keys_set{};  // bits to OR in
+    uint64_t keys_clr{};  // bits to AND out
+    uint32_t btn_set{};
+    uint32_t btn_clr{};
+    bool     quit{ false };
+    bool     resize{ false };
+  } delta;
 
+  SDL_Event ev;
   while(SDL_PollEvent(&ev))
   {
     switch(ev.type)
     {
-
       case SDL_EVENT_QUIT:
-        app.running = false;
+        delta.quit = true;
         break;
 
       case SDL_EVENT_WINDOW_RESIZED:
-        app.resize_swapchain = true;
+        delta.resize = true;
         break;
 
       case SDL_EVENT_MOUSE_MOTION:
-        view.each([&](Input& in) {
-          in.mouse_delta.x += static_cast<float>(ev.motion.xrel);
-          in.mouse_delta.y += static_cast<float>(ev.motion.yrel);
-        });
+        delta.mouse_dx += static_cast<double>(ev.motion.xrel);
+        delta.mouse_dy += static_cast<double>(ev.motion.yrel);
         break;
 
       case SDL_EVENT_KEY_DOWN:
       case SDL_EVENT_KEY_UP: {
-        const uint32_t bit     = to_key_bit(ev.key.scancode);
-        const bool     pressed = (ev.type == SDL_EVENT_KEY_DOWN);
-        if(bit != Key::Unmapped)
+        const uint32_t idx = to_key_index(ev.key.scancode);
+        if(idx != Key::Unmapped)
         {
-          view.each([&](Input& in) { key_write(in, bit, pressed); });
+          const uint64_t mask = uint64_t(1) << idx;
+          if(ev.type == SDL_EVENT_KEY_DOWN)
+            delta.keys_set |= mask;
+          else
+            delta.keys_clr |= mask;
         }
         break;
       }
 
       case SDL_EVENT_MOUSE_BUTTON_DOWN:
       case SDL_EVENT_MOUSE_BUTTON_UP: {
-        const uint32_t mask    = 1u << (ev.button.button - 1u);
-        const bool     pressed = (ev.type == SDL_EVENT_MOUSE_BUTTON_DOWN);
-        view.each([&](Input& in) {
-          if(pressed)
-            in.mouse_buttons |= mask;
-          else
-            in.mouse_buttons &= ~mask;
-        });
+        const uint32_t mask = 1u << (ev.button.button - 1u);
+        if(ev.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
+          delta.btn_set |= mask;
+        else
+          delta.btn_clr |= mask;
         break;
       }
 
@@ -160,6 +169,18 @@ void input(entt::registry& reg)
         break;
     }
   }
+
+  // Write the accumulated frame events into Input.
+  if(delta.quit)
+    app.running = false;
+  if(delta.resize)
+    app.resize_swapchain = true;
+
+  in.mouse_delta = { delta.mouse_dx, delta.mouse_dy };
+  in.keys |= delta.keys_set;
+  in.keys &= ~delta.keys_clr;  // clr after set: a key pressed and released in one frame lands as released
+  in.mouse_buttons |= delta.btn_set;
+  in.mouse_buttons &= ~delta.btn_clr;
 }
 
 }  // namespace sys

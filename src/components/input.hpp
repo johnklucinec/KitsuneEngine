@@ -6,10 +6,11 @@
 // mouse_delta is zeroed at the start of each tick before accumulating events.
 struct Input
 {
-  glm::dvec2 mouse_delta{ 0.0f };  // raw OS counts (SDL xrel / yrel)
-  uint32_t  mouse_buttons{ 0 };   // bitmask — see MouseBtn::
-  uint64_t  keys{ 0 };            // current held state  — see Key::
-  uint64_t  keys_prev{ 0 };       // held state last tick. Used for just_pressed/released
+  glm::dvec2 mouse_delta{ 0.0f };      // raw OS counts (SDL xrel / yrel)
+  uint32_t   mouse_buttons{ 0 };       // bitmask
+  uint32_t   mouse_buttons_prev{ 0 };  // held state last tick, for just_pressed/released
+  uint64_t   keys{ 0 };                // current held state
+  uint64_t   keys_prev{ 0 };           // held state last tick, for just_pressed/released
 };
 
 // Key bit indices (0–63)
@@ -114,7 +115,7 @@ inline bool key_down(const Input& in, uint32_t bit) noexcept
   return (in.keys >> bit) & uint64_t(1);
 }
 
-// Did the key transition from up → down this tick? (toggles, one-shots)
+// Did the key transition from up to down this tick? (toggles, one-shots)
 [[nodiscard]]
 inline bool key_just_pressed(const Input& in, uint32_t bit) noexcept
 {
@@ -122,7 +123,7 @@ inline bool key_just_pressed(const Input& in, uint32_t bit) noexcept
   return (in.keys & mask) && !(in.keys_prev & mask);
 }
 
-// Did the key transition from down → up this tick?
+// Did the key transition from down to up this tick?
 [[nodiscard]]
 inline bool key_just_released(const Input& in, uint32_t bit) noexcept
 {
@@ -137,8 +138,23 @@ inline void key_write(Input& in, uint32_t bit, bool pressed) noexcept
   in.keys             = pressed ? (in.keys | mask) : (in.keys & ~mask);
 }
 
+// Is the button currently held?
 [[nodiscard]]
 inline bool btn_down(const Input& in, uint32_t mask) noexcept
 {
   return (in.mouse_buttons & mask) != 0;
+}
+
+// Did the button transition from up to down this tick? (toggles, one-shots)
+[[nodiscard]]
+inline bool btn_just_pressed(const Input& in, uint32_t mask) noexcept
+{
+  return (in.mouse_buttons & mask) && !(in.mouse_buttons_prev & mask);
+}
+
+// Did the button transition from down to up this tick?
+[[nodiscard]]
+inline bool btn_just_released(const Input& in, uint32_t mask) noexcept
+{
+  return !(in.mouse_buttons & mask) && (in.mouse_buttons_prev & mask);
 }

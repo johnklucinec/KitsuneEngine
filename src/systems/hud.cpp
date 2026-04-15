@@ -19,13 +19,6 @@
 
 namespace sys {
 
-// Cached HUD entity stored in context to avoid a view scan every frame
-// TODO: Move to singleton?
-struct HudEntity
-{
-  entt::entity value;
-};
-
 void hud_init(entt::registry& reg)
 {
   auto& window = reg.ctx().get<WindowContext>();
@@ -71,11 +64,6 @@ void hud_init(entt::registry& reg)
   };
 
   ImGui_ImplVulkan_Init(&vi);
-
-  // Spawn and cache the single HUD entity
-  const auto e = reg.create();
-  reg.emplace<Hud>(e);
-  reg.ctx().emplace<HudEntity>(e);
 }
 
 inline void shutdown(VkDevice device)
@@ -111,13 +99,10 @@ void hud_draw(entt::registry& reg)
   static constexpr const char* kDots[] = { "", ".", "..", "..." };
 
   // HUD window
-  const auto& hudEntity = reg.ctx().get<HudEntity>();
-  (void)hudEntity;  // entity cached
-
   ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiCond_Always);
   ImGui::Begin("##hud", nullptr, kHUDFlags);
 
-  // Using ImGui's built-in smoothed FPS (instead of frame_pacer.currentFps [might change back later])
+  // Using ImGui's built-in FPS
   const int fi = frame.framesInFlight < 0 ? 0 : frame.framesInFlight > 3 ? 3 : frame.framesInFlight;
   ImGui::Text("FPS  %.0f %s", ImGui::GetIO().Framerate, kDots[fi]);
 

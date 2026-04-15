@@ -1,12 +1,14 @@
 #include "frame_pacer_utils.hpp"
-#include <immintrin.h>  // _mm_pause
+#include <immintrin.h>
 #include <thread>
 
 namespace utils {
 
-static constexpr int64_t TOLERANCE_NS = 1'020'000LL;  // ~1 ms
+// ~1ms of headroom before spin-locking: lets the OS timer fire slightly early
+// without overshooting, with the spin loop covering the remaining gap precisely.
+static constexpr int64_t SPIN_GUARD_NS = 1'020'000LL;
 
-FramePacerState::Duration fp_to_duration(double fps)
+FramePacerState::Duration pacer_to_duration(double fps)
 {
   using namespace std::chrono;
 
@@ -16,7 +18,7 @@ FramePacerState::Duration fp_to_duration(double fps)
   return duration_cast<FramePacerState::Duration>(duration<double>(1.0 / fps));
 }
 
-void fp_sleep_until(FramePacerState::TimePoint target, const FramePacerState& state)
+void pacer_sleep_until(FramePacerState::TimePoint target, const FramePacerState& state)
 {
   using Clock = FramePacerState::Clock;
 
@@ -29,7 +31,7 @@ void fp_sleep_until(FramePacerState::TimePoint target, const FramePacerState& st
     for(;;)
     {
       const int64_t remaining = (target - Clock::now()).count();
-      const int64_t ticks     = (remaining - TOLERANCE_NS) / 100;
+      const int64_t ticks     = (remaining - SPIN_GUARD_NS) / 100;
       if(ticks <= 0)
         break;
       LARGE_INTEGER due{ .QuadPart = -(ticks > maxTicks ? maxTicks : ticks) };
@@ -40,7 +42,7 @@ void fp_sleep_until(FramePacerState::TimePoint target, const FramePacerState& st
   else
   {
     // Fallback: sleep slightly short, leaving room for the spin below.
-    const double ms = std::chrono::duration<double, std::milli>(target - Clock::now()).count() - static_cast<double>(TOLERANCE_NS) * 1e-6;
+    const double ms = std::chrono::duration<double, std::milli>(target - Clock::now()).count() - static_cast<double>(SPIN_GUARD_NS) * 1e-6;
 
     if(ms > 0)
       std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(ms));

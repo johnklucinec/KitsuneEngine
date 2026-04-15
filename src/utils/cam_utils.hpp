@@ -8,5 +8,5 @@ namespace CamUtils {
 
 [[nodiscard]] glm::mat4 proj_matrix(const Camera& cam, float aspect) noexcept;
 
-[[nodiscard]] constexpr float vfov_from_hfov(float hfov_deg, float aspect = CAM_REF_ASPECT) noexcept;
+[[nodiscard]] constexpr float vfov_from_hfov(float hfov_deg) noexcept;
 }  // namespace CamUtils

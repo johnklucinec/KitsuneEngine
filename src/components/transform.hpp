@@ -10,7 +10,7 @@ struct Transform
   glm::vec3 scale{ 1.0f, 1.0f, 1.0f };
 };
 
-struct WorldMatrix
+struct CameraViewMatrix
 {
   glm::mat4 matrix{ 1.f };  // computed by camera , read by render
 };

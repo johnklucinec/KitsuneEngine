@@ -13,5 +13,4 @@ struct Settings
   float      sensitivity      = 2.70f;
   bool       show_ui          = true;
   bool       vsync            = false;
-  glm::ivec2 window_size{};
 };

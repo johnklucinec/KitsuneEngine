@@ -6,7 +6,6 @@
 #include <entt/entt.hpp>
 
 #include "components/camera.hpp"
-#include "components/input.hpp"
 #include "components/player_movement.hpp"
 #include "core/settings.hpp"
 #include "components/transform.hpp"
@@ -15,22 +14,24 @@
 
 entt::entity makePlayer(entt::registry& registry, glm::vec3 spawnPos)
 {
-    const auto* settings = registry.ctx().find<Settings>();
-    assert(settings && "makePlayer: Settings must be emplaced in ctx before calling makePlayer");
+  constexpr float BASE_SPEED = 5.5f;
 
-    Camera camera{};
-    camera.fov         = settings->fov;
-    camera.sensitivity = settings->sensitivity;
+  const auto* settings = registry.ctx().find<Settings>();
+  assert(settings && "makePlayer: Settings must be emplaced in ctx before calling makePlayer");
 
-    const entt::entity player = registry.create();
-    registry.emplace<PlayerTag>(player);
-    registry.emplace<Input>(player);
-    registry.emplace<Transform>(player, spawnPos, glm::quat{}, glm::vec3{ 1.f });
-    registry.emplace<Camera>(player, camera);
-    registry.emplace<Velocity>(player);
-    registry.emplace<PlayerMovement>(player);
-    registry.emplace<WorldMatrix>(player);
-    registry.emplace<ProjectionMatrix>(player);
+  Camera camera{};
+  camera.fov         = settings->fov;
+  camera.sensitivity = settings->sensitivity;
 
-    return player;
+  const entt::entity player = registry.create();
+  registry.emplace<PlayerTag>(player);
+  registry.emplace<Transform>(player, spawnPos, glm::identity<glm::quat>(), glm::vec3{ 1.f });
+  registry.emplace<Camera>(player, camera);
+  registry.emplace<Velocity>(player);
+  registry.emplace<PlayerMovement>(player, BASE_SPEED);
+  registry.emplace<CameraViewMatrix>(player);
+  registry.emplace<ProjectionMatrix>(player);
+  registry.emplace<DirtyCameraProjection>(player);
+
+  return player;
 }

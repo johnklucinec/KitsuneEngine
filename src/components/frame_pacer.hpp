@@ -4,6 +4,14 @@
 #include <chrono>
 #include <cstdint>
 
+
+struct FrameTime
+{
+  float   deltaTime{ 1.0f / 60.f };
+  float   fps{ 60.0f };
+  int64_t deltaUs{ 16'667LL };
+};
+
 struct FramePacerState
 {
   using Clock     = std::chrono::high_resolution_clock;
@@ -11,11 +19,8 @@ struct FramePacerState
   using TimePoint = Clock::time_point;
 
   Duration  frameDuration{};  // zero = unlimited
-  TimePoint deadline{};
-  TimePoint lastWake{};
-  int64_t   deltaUs{ 16'667LL };  // seeded to ~60 fps
-  float     deltaTime{ 1.0f / 60.f };
-  float     currentFps{ 60.0f };
+  TimePoint nextFrameDeadline{};
+  TimePoint frameStart{};
   HANDLE    timerHandle{ nullptr };
   int       schedulerPeriodMs{ 1 };
 };

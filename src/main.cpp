@@ -12,6 +12,7 @@ int main(int argc, char* argv[])
 
   // App config
   registry.ctx().emplace<AppState>();
+  registry.ctx().emplace<Input>();
   const auto& settings = registry.ctx().emplace<Settings>(parseArgs(argc, argv));
 
   // Create Player
