@@ -1,3 +1,4 @@
+#include <entt/entt.hpp>
 #include "core/settings.hpp"
 #include "utils/frame_pacer_utils.hpp"
 #include "components/frame_pacer.hpp"

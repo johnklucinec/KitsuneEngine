@@ -1,5 +1,5 @@
 #pragma once
-#include <entt/entt.hpp>
+#include <entt/entity/fwd.hpp>
 
 namespace sys {
 

@@ -22,6 +22,9 @@ struct FrameState
   uint32_t                                    framesInFlight = MAX_FRAMES_IN_FLIGHT;
   std::array<FrameData, MAX_FRAMES_IN_FLIGHT> frames;
   std::vector<VkSemaphore>                    renderSemaphores;  // one per swapchain image
+
+  FrameData&       currentFrame() { return frames[frameIndex]; }
+  const FrameData& currentFrame() const { return frames[frameIndex]; }
 };
 
 namespace renderer {

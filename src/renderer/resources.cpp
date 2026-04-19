@@ -11,8 +11,6 @@
 #include <vector>
 #include "types.hpp"
 
-#include "../assets/shaders/shader_constants.h"
-
 void renderer::initSceneResources(SceneResources& res, const VkContext& ctx, const FrameState& fs)
 {
   // ========================================
