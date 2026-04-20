@@ -5,12 +5,17 @@
 #include <vector>
 #include <iostream>
 #include "common.hpp"
+#include "window.hpp"
 #include <SDL3/SDL_mouse.h>
+#include <entt/entity/registry.hpp>
 
-namespace renderer {
+namespace Renderer {
 
-void initContext(VkContext& ctx, SDL_Window* window)
+void initContext(entt::registry& registry)
 {
+  auto& ctx    = registry.ctx().get<VkContext>();
+  auto& window = registry.ctx().get<WindowContext>();
+
   // ========================================
   // Instance Setup
   VkApplicationInfo appInfo{
@@ -143,8 +148,10 @@ void initContext(VkContext& ctx, SDL_Window* window)
 }
 
 
-void destroyContext(VkContext& ctx)
+void destroyContext(entt::registry& registry)
 {
+  auto& ctx = registry.ctx().get<VkContext>();
+
   vkDestroySurfaceKHR(ctx.instance, ctx.surface, nullptr);
   vkDestroyCommandPool(ctx.device, ctx.commandPool, nullptr);  // Implicitly frees all command buffers
   vmaDestroyAllocator(ctx.allocator);
@@ -152,4 +159,4 @@ void destroyContext(VkContext& ctx)
   vkDestroyInstance(ctx.instance, nullptr);  // Should be deleted last
 }
 
-}  // namespace renderer
+}  // namespace Renderer

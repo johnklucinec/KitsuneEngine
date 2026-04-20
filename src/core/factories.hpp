@@ -1,5 +1,4 @@
 #pragma once
-
 #include <entt/entity/fwd.hpp>
 #include <glm/vec3.hpp>
 

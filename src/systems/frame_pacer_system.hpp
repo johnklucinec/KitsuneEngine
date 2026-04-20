@@ -1,16 +1,16 @@
 #pragma once
 #include <entt/entity/fwd.hpp>
 
-namespace sys {
+namespace System {
 
 // Emplaces FramePacerState into ctx(), acquires the OS timer, sets the
 // scheduler period to its minimum, and elevates thread priority.
-void frame_pacer_init(entt::registry& reg);
+void framePacerInit(entt::registry& reg);
 
 // Call after wait on fence
 // Sleeps until the next frame deadline, then writes deltaTime / currentFps / deltaUs
-void frame_pacer(entt::registry& reg);
+void framePacer(entt::registry& reg);
 
-void frame_pacer_shutdown(entt::registry& reg);
+void framePacerShutdown(entt::registry& reg);
 
-}  // namespace sys
+}  // namespace System

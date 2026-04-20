@@ -1,10 +1,11 @@
-#include "components/camera.hpp"
-#include "components/input.hpp"
-#include "components/player_movement.hpp"
-#include "components/transform.hpp"
-#include "components/velocity.hpp"
-#include "components/frame_pacer.hpp"
-#include "systems/player_movement.hpp"
+#include <entt/entity/registry.hpp>
+#include "camera.hpp"
+#include "input.hpp"
+#include "player_movement.hpp"
+#include "transform.hpp"
+#include "velocity.hpp"
+#include "frame_pacer.hpp"
+#include "player_movement_system.hpp"
 
 #include <glm/glm.hpp>
 #include <cmath>
@@ -14,15 +15,15 @@ inline constexpr float PC_BACKWARD_MULT  = 0.90f;
 inline constexpr float PC_BACK_DIAG_MULT = (0.933333f + 1.0f) * 0.5f;
 inline constexpr float PC_AXIS_EPS       = 1e-3f;
 
-void sys::player_movement(entt::registry& reg)
+void System::playerMovement(entt::registry& reg)
 {
   const auto& input = reg.ctx().get<Input>();
   const auto& dt    = reg.ctx().get<FrameTime>().deltaTime;
 
   reg.view<Transform, Velocity, const PlayerMovement, const Camera>().each([&input, dt](Transform& transform, Velocity& vel, const PlayerMovement& pc, const Camera& cam) {
-    const float side   = (key_down(input, Key::A) ? 1.0f : 0.0f) - (key_down(input, Key::D) ? 1.0f : 0.0f);
-    const float fwd    = (key_down(input, Key::W) ? 1.0f : 0.0f) - (key_down(input, Key::S) ? 1.0f : 0.0f);
-    const bool  sprint = key_down(input, Key::LShift);
+    const float side   = (keyDown(input, Key::A) ? 1.0f : 0.0f) - (keyDown(input, Key::D) ? 1.0f : 0.0f);
+    const float fwd    = (keyDown(input, Key::W) ? 1.0f : 0.0f) - (keyDown(input, Key::S) ? 1.0f : 0.0f);
+    const bool  sprint = keyDown(input, Key::LShift);
 
     glm::vec2   wish{ side, fwd };
     const float len_sq = wish.x * wish.x + wish.y * wish.y;

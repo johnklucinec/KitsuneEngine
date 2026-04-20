@@ -3,7 +3,7 @@
 This is a _very_ early build.
 
 ## Info
-
+- ECS (using EnTT)
 - Forward (not Forward+, since less than 5 dynamic lights)
 - Burley + GGX
 - Overwatch FOV (103deg)
@@ -14,21 +14,27 @@ This is a _very_ early build.
 
 ## Immediate Plans
 
-- Convert to ECS Engine (In Progress)
+- Convert obj --> glTF
+- Load multiple models using instancing (dynamic through ECS, not by modifying engine)
+- Implement raycast, lifespan, scenario, scoring, and target systems (and ones I forgot)
 
 ## Semi-Immediate Plans
 
 - Fullscreen Exclusive vs Fullscreen Borderless
-- Smart check for all display modes\
-- Disable unused SLD3 features. 
+- Smart check for all display modes
+- Disable unused SLD3 features
+- Lock 16:9 aspect ratio?
+- Explain Info in more detail
+- Betting settings / controls systems. Settings.ini file AND launch options
+- In engine profiling
 
 
 ## Long Term Plans
 * Turn into a simple FPS Aim Trainer (Like Kovaaks)
 * Make FPS Limiter Linux compatable + VK_EXT_present_timing (if that makes sense even)
 * Make CMAKE better for release build
-* Convert to VK_EXT_descriptor_heap. (Two backends in an RHI?).
-* Convert to Forward+. Mainly when the engine gets more advanced. 
+* Convert to VK_EXT_descriptor_heap (Two backends in an RHI?)
+* Convert to Forward+. Mainly when the engine gets more advanced
 ---
 
 ## Settings! (Launch Options)

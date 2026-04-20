@@ -3,6 +3,7 @@
 #include <vma/vk_mem_alloc.h>
 #include <volk/volk.h>
 #include <SDL3/SDL_vulkan.h>
+#include <entt/entity/fwd.hpp>
 
 struct VkContext
 {
@@ -17,7 +18,7 @@ struct VkContext
   VmaAllocator     allocator      = VK_NULL_HANDLE;
 };
 
-namespace renderer {
-void initContext(VkContext& ctx, SDL_Window* window);
-void destroyContext(VkContext& ctx);
-}  // namespace renderer
+namespace Renderer {
+void initContext(entt::registry& registry);
+void destroyContext(entt::registry& registry);
+}  // namespace Renderer

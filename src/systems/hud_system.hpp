@@ -1,3 +1,6 @@
+#pragma once
+#include <entt/entity/fwd.hpp>
+
 /*
  * Non-interactive HUD overlay (ImGui + Vulkan 1.4 + SDL3 + Volk)
  *
@@ -7,20 +10,16 @@
  *   - maxSets:         += 1  (for ImGui)
  *   - flags:           VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT
  */
-
-#pragma once
-#include <entt/entity/fwd.hpp>
-
-namespace sys {
+namespace System {
 
 // Call after swapchain creation
-void hud_init(entt::registry& reg);
+void hudInit(entt::registry& reg);
 
 // Call after draw calls, before vkCmdEndRendering
 // builds and draws the UI
-void hud_draw(entt::registry& reg);
+void hudDraw(entt::registry& reg);
 
 // Call before vkDestroyDescriptorPool
-void hud_shutdown(entt::registry& reg);
+void hudShutdown(entt::registry& reg);
 
-}  // namespace sys
+}  // namespace System

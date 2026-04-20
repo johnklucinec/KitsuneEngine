@@ -4,6 +4,7 @@
 #include <array>
 #include <vector>
 #include "common.hpp"
+#include <entt/entity/fwd.hpp>
 
 struct VkContext;
 struct SwapchainState;
@@ -13,7 +14,6 @@ struct FrameData
   VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
   VkFence         fence         = VK_NULL_HANDLE;
   VkSemaphore     presentSem    = VK_NULL_HANDLE;
-  // ShaderDataBuffer lives here too — see resources.hpp
 };
 
 struct FrameState
@@ -27,8 +27,8 @@ struct FrameState
   const FrameData& currentFrame() const { return frames[frameIndex]; }
 };
 
-namespace renderer {
-void initFrameState(FrameState& fs, const VkContext& ctx, const SwapchainState& sc);
-void syncFrameSemaphores(FrameState& fs, const VkContext& ctx, const SwapchainState& sc);
-void destroyFrameState(FrameState& fs, const VkContext& ctx);
-}  // namespace renderer
+namespace Renderer {
+void initFrameState(entt::registry& registry);
+void syncFrameSemaphores(entt::registry& registry);
+void destroyFrameState(entt::registry& registry);
+}  // namespace Renderer

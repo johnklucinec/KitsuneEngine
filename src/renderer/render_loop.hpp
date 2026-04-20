@@ -1,7 +1,7 @@
 #pragma once
 #include <entt/entity/fwd.hpp>
 
-namespace renderloop {
+namespace RenderLoop {
 void init(entt::registry& registry);  // Cache all the pointers/entities once
 
 void waitForFences(entt::registry& registry);
@@ -14,4 +14,4 @@ void presentImage(entt::registry& registry);      // returns true if swapchain n
 void rebuildSwapchain(entt::registry& registry);  // fullscreen + swapchain resize combined
 
 void shutdown(entt::registry& registry);
-}  // namespace renderloop
+}  // namespace RenderLoop

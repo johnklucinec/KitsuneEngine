@@ -1,7 +1,7 @@
-#include <entt/entt.hpp>
+#include <entt/entity/registry.hpp>
 
-#include "systems/hud.hpp"
-#include "components/hud.hpp"
+#include "hud_system.hpp"
+#include "hud.hpp"
 
 #include <volk/volk.h>
 #include <imgui.h>
@@ -14,12 +14,12 @@
 #include "renderer/pipeline.hpp"
 #include "renderer/frame.hpp"
 
-#include "components/window.hpp"
+#include "window.hpp"
 #include "core/settings.hpp"
 
-namespace sys {
+namespace System {
 
-void hud_init(entt::registry& reg)
+void hudInit(entt::registry& reg)
 {
   auto& window = reg.ctx().get<WindowContext>();
   auto& ctx    = reg.ctx().get<VkContext>();
@@ -74,14 +74,14 @@ inline void shutdown(VkDevice device)
   ImGui::DestroyContext();
 }
 
-void hud_draw(entt::registry& reg)
+void hudDraw(entt::registry& reg)
 {
   auto& settings = reg.ctx().get<Settings>();
   if(!settings.show_ui)
     return;
 
   // Begin ImGui frame here
-  // TODO: Verify: called right after frame_pacer so DeltaTime includes the sleep and io.Framerate stays accurate
+  // TODO: Verify: called right after framePacer so DeltaTime includes the sleep and io.Framerate stays accurate
   ImGui_ImplSDL3_NewFrame();
   ImGui_ImplVulkan_NewFrame();
   ImGui::NewFrame();
@@ -132,10 +132,10 @@ void hud_draw(entt::registry& reg)
   ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), frame.frames[frame.frameIndex].commandBuffer);
 }
 
-void hud_shutdown(entt::registry& reg)
+void hudShutdown(entt::registry& reg)
 {
   auto& ctx = reg.ctx().get<VkContext>();
   shutdown(ctx.device);
 }
 
-}  // namespace sys
+}  // namespace System

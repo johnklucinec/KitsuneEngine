@@ -1,15 +1,15 @@
-#include <entt/entt.hpp>
+#include <entt/entity/registry.hpp>
 #include "core/settings.hpp"
 #include "utils/frame_pacer_utils.hpp"
-#include "components/frame_pacer.hpp"
-#include "systems/frame_pacer.hpp"
+#include "frame_pacer.hpp"
+#include "frame_pacer_system.hpp"
 
 #pragma comment(lib, "winmm.lib")
 #include <mmsystem.h>
 
-namespace sys {
+namespace System {
 
-void frame_pacer_init(entt::registry& reg)
+void framePacerInit(entt::registry& reg)
 {
   auto& fs  = reg.ctx().emplace<FramePacerState>();
   auto& cfg = reg.ctx().get<Settings>();
@@ -28,26 +28,26 @@ void frame_pacer_init(entt::registry& reg)
   SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
 
   // Seed timing from current settings.
-  fs.frameDuration     = utils::pacer_to_duration(cfg.fps_max);
+  fs.frameDuration     = PacerUtils::pacerToDuration(cfg.fps_max);
   const auto now       = FramePacerState::Clock::now();
   fs.nextFrameDeadline = now + fs.frameDuration;
   fs.frameStart        = now;
 }
 
-void frame_pacer(entt::registry& reg)
+void framePacer(entt::registry& reg)
 {
   auto& fs  = reg.ctx().get<FramePacerState>();
   auto& ft  = reg.ctx().get<FrameTime>();
   auto& cfg = reg.ctx().get<Settings>();
 
   // Sync frame duration if fps_max changed at runtime.
-  const auto wantedDuration = utils::pacer_to_duration(cfg.fps_max);
+  const auto wantedDuration = PacerUtils::pacerToDuration(cfg.fps_max);
   if(wantedDuration != fs.frameDuration)
     fs.frameDuration = wantedDuration;
 
   // Sleep until the next deadline (no-op when frameDuration == zero).
   if(fs.frameDuration != FramePacerState::Duration::zero())
-    utils::pacer_sleep_until(fs.nextFrameDeadline, fs);
+    PacerUtils::pacerSleepUntil(fs.nextFrameDeadline, fs);
 
   // Capture actual wake-up time and update delta metrics.
   const auto now = FramePacerState::Clock::now();
@@ -68,7 +68,7 @@ void frame_pacer(entt::registry& reg)
   }
 }
 
-void frame_pacer_shutdown(entt::registry& reg)
+void framePacerShutdown(entt::registry& reg)
 {
   auto& fs = reg.ctx().get<FramePacerState>();
 
@@ -84,4 +84,4 @@ void frame_pacer_shutdown(entt::registry& reg)
   timeEndPeriod(caps.wPeriodMin);
 }
 
-}  // namespace sys
+}  // namespace System

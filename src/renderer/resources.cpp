@@ -1,6 +1,7 @@
 #include "resources.hpp"
 #include "context.hpp"
 #include "frame.hpp"
+#include <entt/entity/fwd.hpp>
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
@@ -10,9 +11,14 @@
 #include <string>
 #include <vector>
 #include "types.hpp"
+#include <entt/entity/registry.hpp>
 
-void renderer::initSceneResources(SceneResources& res, const VkContext& ctx, const FrameState& fs)
+void Renderer::initSceneResources(entt::registry& registry)
 {
+  auto&       res = registry.ctx().get<SceneResources>();
+  const auto& ctx = registry.ctx().get<VkContext>();
+  const auto& fs  = registry.ctx().get<FrameState>();
+
   // ========================================
   // Load Mesh
   tinyobj::attrib_t                attrib;
@@ -255,8 +261,11 @@ void renderer::initSceneResources(SceneResources& res, const VkContext& ctx, con
   res.textureDescriptors = textureDescriptors;
 }
 
-void renderer::destroySceneResources(SceneResources& res, const VkContext& ctx)
+void Renderer::destroySceneResources(entt::registry& registry)
 {
+  auto&       res = registry.ctx().get<SceneResources>();
+  const auto& ctx = registry.ctx().get<VkContext>();
+
   for(auto& tex : res.textures)
   {
     vkDestroySampler(ctx.device, tex.sampler, nullptr);

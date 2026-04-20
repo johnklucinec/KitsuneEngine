@@ -1,11 +1,22 @@
 #include "swapchain.hpp"
 #include "common.hpp"
+#include "renderer/context.hpp"
+#include "renderer/resources.hpp"
+#include "window.hpp"
+#include "core/settings.hpp"
 #include <cassert>
+#include <entt/entity/registry.hpp>
 
-namespace renderer {
+namespace Renderer {
 
-void initSwapchain(SwapchainState& sc, const VkContext& ctx, SDL_Window* window, bool fullscreen)
+void initSwapchain(entt::registry& registry)
 {
+  auto& ctx        = registry.ctx().get<VkContext>();
+  auto& sc         = registry.ctx().get<SwapchainState>();
+  auto& window     = registry.ctx().get<WindowContext>();
+  auto& settings   = registry.ctx().get<Settings>();
+  bool  fullscreen = settings.fullscreen;
+
   // ========================================
   // Window and Surface
   if(fullscreen)  // TODO: should prob make this its own util function
@@ -117,8 +128,11 @@ void initSwapchain(SwapchainState& sc, const VkContext& ctx, SDL_Window* window,
   chk(vkCreateImageView(ctx.device, &depthViewCI, nullptr, &sc.depthImageView));
 }
 
-void destroySwapchain(SwapchainState& sc, const VkContext& ctx)
+void destroySwapchain(entt::registry& registry)
 {
+  auto& ctx = registry.ctx().get<VkContext>();
+  auto& sc  = registry.ctx().get<SwapchainState>();
+
   vkDestroyImageView(ctx.device, sc.depthImageView, nullptr);
   vmaDestroyImage(ctx.allocator, sc.depthImage, sc.depthAlloc);
 
@@ -136,8 +150,11 @@ void destroySwapchain(SwapchainState& sc, const VkContext& ctx)
   sc.depthFormat    = VK_FORMAT_UNDEFINED;
 }
 
-void rebuildSwapchain(SwapchainState& sc, const VkContext& ctx)
+void rebuildSwapchain(entt::registry& registry)
 {
+  auto& ctx = registry.ctx().get<VkContext>();
+  auto& sc  = registry.ctx().get<SwapchainState>();
+
   // Wait until the GPU has completed all outstanding operations
   vkDeviceWaitIdle(ctx.device);
 
@@ -201,4 +218,4 @@ void rebuildSwapchain(SwapchainState& sc, const VkContext& ctx)
   chk(vkCreateImageView(ctx.device, &depthViewCI, nullptr, &sc.depthImageView));
 }
 
-}  // namespace renderer
+}  // namespace Renderer

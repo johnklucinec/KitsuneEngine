@@ -1,5 +1,5 @@
 #include <entt/entity/fwd.hpp>
-#include <entt/entt.hpp>
+#include <entt/entity/registry.hpp>
 
 #include "core/settings.hpp"
 #include "core/app.hpp"
@@ -11,12 +11,12 @@
 #include "renderer/resources.hpp"
 #include "renderer/pipeline.hpp"
 
-#include "components/window.hpp"
-#include "components/transform.hpp"
-#include "components/camera.hpp"
+#include "window.hpp"
+#include "transform.hpp"
+#include "camera.hpp"
 #include "tags.hpp"
 
-#include "systems/hud.hpp"
+#include "hud_system.hpp"
 
 namespace {
 struct RenderCache
@@ -26,7 +26,7 @@ struct RenderCache
 static RenderCache rc{};
 }  // namespace
 
-void renderloop::init(entt::registry& registry)
+void RenderLoop::init(entt::registry& registry)
 {
   auto& fs  = registry.ctx().get<FrameState>();
   auto& res = registry.ctx().get<SceneResources>();
@@ -44,10 +44,10 @@ void renderloop::init(entt::registry& registry)
   assert(rc.playerEntity != entt::null);
 
   // Also controls HUD
-  sys::hud_init(registry);
+  System::hudInit(registry);
 }
 
-void renderloop::waitForFences(entt::registry& registry)
+void RenderLoop::waitForFences(entt::registry& registry)
 {
   auto& ctx   = registry.ctx().get<VkContext>();
   auto& frame = registry.ctx().get<FrameState>().currentFrame();
@@ -56,7 +56,7 @@ void renderloop::waitForFences(entt::registry& registry)
   chk(vkResetFences(ctx.device, 1, &frame.fence));                      // Reset for next submission
 }
 
-void renderloop::acquireNextImage(entt::registry& registry)
+void RenderLoop::acquireNextImage(entt::registry& registry)
 {
   auto& app   = registry.ctx().get<AppState>();
   auto& ctx   = registry.ctx().get<VkContext>();
@@ -67,7 +67,7 @@ void renderloop::acquireNextImage(entt::registry& registry)
     app.resize_swapchain = true;
 }
 
-void renderloop::updateShaderData(entt::registry& registry)
+void RenderLoop::updateShaderData(entt::registry& registry)
 {
   auto& fs  = registry.ctx().get<FrameState>();
   auto& res = registry.ctx().get<SceneResources>();
@@ -79,7 +79,7 @@ void renderloop::updateShaderData(entt::registry& registry)
   memcpy(res.shaderDataBuffers[fs.frameIndex].allocationInfo.pMappedData, &res.shaderData, sizeof(ShaderData));
 }
 
-void renderloop::recordCommandBuffer(entt::registry& registry)
+void RenderLoop::recordCommandBuffer(entt::registry& registry)
 {
   auto& ctx = registry.ctx().get<VkContext>();
   auto& sc  = registry.ctx().get<SwapchainState>();
@@ -184,7 +184,7 @@ void renderloop::recordCommandBuffer(entt::registry& registry)
   vkCmdDrawIndexed(cb, res.indexCount, INSTANCE_COUNT, 0, 0, 0);
 
   // Build and draw HUD
-  sys::hud_draw(registry);
+  System::hudDraw(registry);
 
   // Finish current render pass
   vkCmdEndRendering(cb);
@@ -210,7 +210,7 @@ void renderloop::recordCommandBuffer(entt::registry& registry)
   chk(vkEndCommandBuffer(cb));  // End recording to the command buffer
 }
 
-void renderloop::submitCommandBuffer(entt::registry& registry)
+void RenderLoop::submitCommandBuffer(entt::registry& registry)
 {
   auto& ctx = registry.ctx().get<VkContext>();
   auto& sc  = registry.ctx().get<SwapchainState>();
@@ -247,13 +247,13 @@ void renderloop::submitCommandBuffer(entt::registry& registry)
 }
 
 // calculate frame index for next render loop iteration
-void renderloop::advanceFrameIndex(entt::registry& registry)
+void RenderLoop::advanceFrameIndex(entt::registry& registry)
 {
   auto& fs      = registry.ctx().get<FrameState>();
   fs.frameIndex = (fs.frameIndex + 1) % fs.framesInFlight;
 }
 
-void renderloop::presentImage(entt::registry& registry)
+void RenderLoop::presentImage(entt::registry& registry)
 {
   auto& app = registry.ctx().get<AppState>();
   auto& ctx = registry.ctx().get<VkContext>();
@@ -273,7 +273,7 @@ void renderloop::presentImage(entt::registry& registry)
     app.resize_swapchain = true;
 }
 
-void renderloop::rebuildSwapchain(entt::registry& registry)
+void RenderLoop::rebuildSwapchain(entt::registry& registry)
 {
   auto& app = registry.ctx().get<AppState>();
 
@@ -302,8 +302,8 @@ void renderloop::rebuildSwapchain(entt::registry& registry)
       sc.needsFullscreen = false;
     }
 
-    renderer::rebuildSwapchain(sc, ctx);
-    renderer::syncFrameSemaphores(fs, ctx, sc);
+    Renderer::rebuildSwapchain(registry);
+    Renderer::syncFrameSemaphores(registry);
     window.height = sc.extent.height;
     window.width  = sc.extent.width;
     registry.emplace_or_replace<DirtyCameraProjection>(rc.playerEntity);
@@ -312,8 +312,8 @@ void renderloop::rebuildSwapchain(entt::registry& registry)
   }
 }
 
-void renderloop::shutdown(entt::registry& registry)
+void RenderLoop::shutdown(entt::registry& registry)
 {
-  sys::hud_shutdown(registry);
+  System::hudShutdown(registry);
   rc.playerEntity = {};
 }

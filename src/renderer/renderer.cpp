@@ -3,7 +3,7 @@
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
-#include "entt/entt.hpp"
+#include "entt/entity/registry.hpp"
 #include "core/settings.hpp"
 #include "renderer.hpp"
 
@@ -13,11 +13,11 @@
 #include "renderer/resources.hpp"
 #include "renderer/pipeline.hpp"
 #include "renderer/renderer.hpp"
-#include "components/window.hpp"
+#include "window.hpp"
 
 #include <SDL3/SDL.h>
-
-void renderer::init(entt::registry& registry)
+namespace Renderer {
+void init(entt::registry& registry)
 {
   auto& settings = registry.ctx().get<Settings>();
 
@@ -38,23 +38,24 @@ void renderer::init(entt::registry& registry)
   chk(SDL_Vulkan_LoadLibrary(NULL));
   volkInitialize();
 
+  // TODO: Move to settings
   ctx.deviceIndex   = settings.device;
   fs.framesInFlight = settings.reduce_buffering ? 1 : MAX_FRAMES_IN_FLIGHT;
 
-  renderer::initContext(ctx, window);
-  renderer::initSwapchain(sc, ctx, window, settings.fullscreen);
-  renderer::initFrameState(fs, ctx, sc);
-  renderer::initSceneResources(res, ctx, fs);
-  renderer::initPipeline(ps, ctx, sc, res);
+  initContext(registry);
+  initSwapchain(registry);
+  initFrameState(registry);
+  initSceneResources(registry);
+  initPipeline(registry);
 }
 
-void renderer::deviceWaitIdle(entt::registry& registry)
+void deviceWaitIdle(entt::registry& registry)
 {
   auto& ctx = registry.ctx().emplace<VkContext>();
   chk(vkDeviceWaitIdle(ctx.device));  // Wait until the GPU has completed all outstanding operations
 }
 
-void renderer::shutdown(entt::registry& registry)
+void shutdown(entt::registry& registry)
 {
   auto& ctx    = registry.ctx().get<VkContext>();
   auto& sc     = registry.ctx().get<SwapchainState>();
@@ -63,13 +64,14 @@ void renderer::shutdown(entt::registry& registry)
   auto& ps     = registry.ctx().get<PipelineState>();
   auto& window = registry.ctx().get<WindowContext>();
 
-  renderer::destroyPipeline(ps, ctx);
-  renderer::destroySceneResources(res, ctx);
-  renderer::destroyFrameState(fs, ctx);
-  renderer::destroySwapchain(sc, ctx);
-  renderer::destroyContext(ctx);
+  destroyPipeline(registry);
+  destroySceneResources(registry);
+  destroyFrameState(registry);
+  destroySwapchain(registry);
+  destroyContext(registry);
 
   SDL_DestroyWindow(window);
   SDL_QuitSubSystem(SDL_INIT_VIDEO);
   SDL_Quit();
 }
+}  // namespace Renderer

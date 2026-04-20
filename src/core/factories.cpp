@@ -3,14 +3,14 @@
 #include <cassert>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
-#include <entt/entt.hpp>
+#include <entt/entity/registry.hpp>
 
-#include "components/camera.hpp"
-#include "components/player_movement.hpp"
+#include "camera.hpp"
+#include "player_movement.hpp"
 #include "core/settings.hpp"
-#include "components/transform.hpp"
-#include "components/velocity.hpp"
-#include "components/tags.hpp"
+#include "transform.hpp"
+#include "velocity.hpp"
+#include "tags.hpp"
 
 entt::entity makePlayer(entt::registry& registry, glm::vec3 spawnPos)
 {

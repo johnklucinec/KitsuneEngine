@@ -1,9 +1,9 @@
 #pragma once
+#include <entt/entity/fwd.hpp>
 #include <vulkan/vulkan.h>
 #include <vma/vk_mem_alloc.h>
 #include <vector>
 #include <SDL3/SDL_video.h>
-#include "renderer/context.hpp"
 
 struct SwapchainState
 {
@@ -23,8 +23,8 @@ struct SwapchainState
   VkImageCreateInfo        depthImageCI{};
 };
 
-namespace renderer {
-void initSwapchain(SwapchainState& sc, const VkContext& ctx, SDL_Window* window, bool fullscreen);
-void destroySwapchain(SwapchainState& sc, const VkContext& ctx);
-void rebuildSwapchain(SwapchainState& sc, const VkContext& ctx);
-}  // namespace renderer
+namespace Renderer {
+void initSwapchain(entt::registry& registry);
+void destroySwapchain(entt::registry& registry);
+void rebuildSwapchain(entt::registry& registry);
+}  // namespace Renderer

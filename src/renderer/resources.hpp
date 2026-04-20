@@ -7,6 +7,7 @@
 #include <glm/glm.hpp>
 #include <array>
 #include "common.hpp"
+#include <entt/entity/fwd.hpp>
 
 #include "../assets/shaders/shader_constants.h"  // TODO: TEMPORARY IDEA
 
@@ -50,7 +51,7 @@ struct SceneResources
   Slang::ComPtr<slang::IGlobalSession>               slangSession;
 };
 
-namespace renderer {
-void initSceneResources(SceneResources& res, const VkContext& ctx, const FrameState& fs);
-void destroySceneResources(SceneResources& res, const VkContext& ctx);
-}  // namespace renderer
+namespace Renderer {
+void initSceneResources(entt::registry& registry);
+void destroySceneResources(entt::registry& registry);
+}  // namespace Renderer

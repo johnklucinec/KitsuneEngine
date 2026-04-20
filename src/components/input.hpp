@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 
-// Written exclusively by the Input system (tick 1).
+// Written exclusively by the Input system.
 // mouse_delta is zeroed at the start of each tick before accumulating events.
 struct Input
 {
@@ -110,14 +110,14 @@ inline constexpr uint32_t X2     = 1u << 4;
 
 // Is the key currently held?
 [[nodiscard]]
-inline bool key_down(const Input& in, uint32_t bit) noexcept
+inline bool keyDown(const Input& in, uint32_t bit) noexcept
 {
   return (in.keys >> bit) & uint64_t(1);
 }
 
 // Did the key transition from up to down this tick? (toggles, one-shots)
 [[nodiscard]]
-inline bool key_just_pressed(const Input& in, uint32_t bit) noexcept
+inline bool keyJustPressed(const Input& in, uint32_t bit) noexcept
 {
   const uint64_t mask = uint64_t(1) << bit;
   return (in.keys & mask) && !(in.keys_prev & mask);
@@ -125,14 +125,14 @@ inline bool key_just_pressed(const Input& in, uint32_t bit) noexcept
 
 // Did the key transition from down to up this tick?
 [[nodiscard]]
-inline bool key_just_released(const Input& in, uint32_t bit) noexcept
+inline bool keyJustReleased(const Input& in, uint32_t bit) noexcept
 {
   const uint64_t mask = uint64_t(1) << bit;
   return !(in.keys & mask) && (in.keys_prev & mask);
 }
 
 // Set or clear a key bit (used by the Input system only)
-inline void key_write(Input& in, uint32_t bit, bool pressed) noexcept
+inline void keyWrite(Input& in, uint32_t bit, bool pressed) noexcept
 {
   const uint64_t mask = uint64_t(1) << bit;
   in.keys             = pressed ? (in.keys | mask) : (in.keys & ~mask);
@@ -140,21 +140,21 @@ inline void key_write(Input& in, uint32_t bit, bool pressed) noexcept
 
 // Is the button currently held?
 [[nodiscard]]
-inline bool btn_down(const Input& in, uint32_t mask) noexcept
+inline bool btnDown(const Input& in, uint32_t mask) noexcept
 {
   return (in.mouse_buttons & mask) != 0;
 }
 
 // Did the button transition from up to down this tick? (toggles, one-shots)
 [[nodiscard]]
-inline bool btn_just_pressed(const Input& in, uint32_t mask) noexcept
+inline bool btnJustPressed(const Input& in, uint32_t mask) noexcept
 {
   return (in.mouse_buttons & mask) && !(in.mouse_buttons_prev & mask);
 }
 
 // Did the button transition from down to up this tick?
 [[nodiscard]]
-inline bool btn_just_released(const Input& in, uint32_t mask) noexcept
+inline bool btnJustReleased(const Input& in, uint32_t mask) noexcept
 {
   return !(in.mouse_buttons & mask) && (in.mouse_buttons_prev & mask);
 }

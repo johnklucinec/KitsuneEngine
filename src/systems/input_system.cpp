@@ -1,14 +1,14 @@
-#include <entt/entt.hpp>
+#include <entt/entity/registry.hpp>
 #include "core/app.hpp"
 #include <SDL3/SDL.h>
 
-#include "systems/input.hpp"
-#include "components/input.hpp"
+#include "input_system.hpp"
+#include "input.hpp"
 
 namespace {
 
 [[nodiscard]]
-constexpr uint32_t to_key_index(SDL_Scancode sc) noexcept
+constexpr uint32_t toKeyIndex(SDL_Scancode sc) noexcept
 {
   // clang-format off
   switch (sc)
@@ -96,7 +96,7 @@ constexpr uint32_t to_key_index(SDL_Scancode sc) noexcept
 
 }  // anonymous namespace
 
-namespace sys {
+namespace System {
 
 void input(entt::registry& reg)
 {
@@ -123,10 +123,10 @@ void input(entt::registry& reg)
     bool     resize{ false };
   } delta;
 
-  SDL_Event ev;
-  while(SDL_PollEvent(&ev))
+  SDL_Event event;
+  while(SDL_PollEvent(&event))
   {
-    switch(ev.type)
+    switch(event.type)
     {
       case SDL_EVENT_QUIT:
         delta.quit = true;
@@ -137,17 +137,17 @@ void input(entt::registry& reg)
         break;
 
       case SDL_EVENT_MOUSE_MOTION:
-        delta.mouse_dx += static_cast<double>(ev.motion.xrel);
-        delta.mouse_dy += static_cast<double>(ev.motion.yrel);
+        delta.mouse_dx += static_cast<double>(event.motion.xrel);
+        delta.mouse_dy += static_cast<double>(event.motion.yrel);
         break;
 
       case SDL_EVENT_KEY_DOWN:
       case SDL_EVENT_KEY_UP: {
-        const uint32_t idx = to_key_index(ev.key.scancode);
+        const uint32_t idx = toKeyIndex(event.key.scancode);
         if(idx != Key::Unmapped)
         {
           const uint64_t mask = uint64_t(1) << idx;
-          if(ev.type == SDL_EVENT_KEY_DOWN)
+          if(event.type == SDL_EVENT_KEY_DOWN)
             delta.keys_set |= mask;
           else
             delta.keys_clr |= mask;
@@ -157,8 +157,8 @@ void input(entt::registry& reg)
 
       case SDL_EVENT_MOUSE_BUTTON_DOWN:
       case SDL_EVENT_MOUSE_BUTTON_UP: {
-        const uint32_t mask = 1u << (ev.button.button - 1u);
-        if(ev.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
+        const uint32_t mask = 1u << (event.button.button - 1u);
+        if(event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
           delta.btn_set |= mask;
         else
           delta.btn_clr |= mask;
@@ -183,4 +183,4 @@ void input(entt::registry& reg)
   in.mouse_buttons &= ~delta.btn_clr;
 }
 
-}  // namespace sys
+}  // namespace System

@@ -2,11 +2,16 @@
 #include "context.hpp"
 #include "common.hpp"
 #include "swapchain.hpp"
+#include "entt/entity/registry.hpp"
 
-namespace renderer {
+namespace Renderer {
 
-void syncFrameSemaphores(FrameState& fs, const VkContext& ctx, const SwapchainState& sc)
+void syncFrameSemaphores(entt::registry& registry)
 {
+  auto&       fs  = registry.ctx().get<FrameState>();
+  const auto& ctx = registry.ctx().get<VkContext>();
+  const auto& sc  = registry.ctx().get<SwapchainState>();
+
   VkSemaphoreCreateInfo semaphoreCI{
     .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
   };
@@ -19,8 +24,12 @@ void syncFrameSemaphores(FrameState& fs, const VkContext& ctx, const SwapchainSt
     chk(vkCreateSemaphore(ctx.device, &semaphoreCI, nullptr, &sem));
 }
 
-void initFrameState(FrameState& fs, const VkContext& ctx, const SwapchainState& sc)
+void initFrameState(entt::registry& registry)
 {
+  auto&       fs  = registry.ctx().get<FrameState>();
+  const auto& ctx = registry.ctx().get<VkContext>();
+  const auto& sc  = registry.ctx().get<SwapchainState>();
+
   // ========================================
   // Synchronization Objects
   VkSemaphoreCreateInfo semaphoreCI{
@@ -51,11 +60,15 @@ void initFrameState(FrameState& fs, const VkContext& ctx, const SwapchainState& 
   }
 
   // Per-swapchain-image: one render semaphore each
-  syncFrameSemaphores(fs, ctx, sc);
+  syncFrameSemaphores(registry);
 }
 
-void destroyFrameState(FrameState& fs, const VkContext& ctx)
+void destroyFrameState(entt::registry& registry)
 {
+  auto&       fs  = registry.ctx().get<FrameState>();
+  const auto& ctx = registry.ctx().get<VkContext>();
+  const auto& sc  = registry.ctx().get<SwapchainState>();
+
   // Collect and free command buffers explicitly before pool teardown
   std::array<VkCommandBuffer, MAX_FRAMES_IN_FLIGHT> cbs{};
   for(uint32_t i = 0; i < fs.framesInFlight; ++i)
@@ -73,4 +86,4 @@ void destroyFrameState(FrameState& fs, const VkContext& ctx)
   fs.renderSemaphores.clear();
 }
 
-}  // namespace renderer
+}  // namespace Renderer

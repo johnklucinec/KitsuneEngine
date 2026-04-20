@@ -10,11 +10,17 @@
 #include <cassert>
 #include <span>
 #include "common.hpp"
+#include "entt/entity/registry.hpp"
 
-namespace renderer {
+namespace Renderer {
 
-void initPipeline(PipelineState& ps, const VkContext& ctx, const SwapchainState& sc, const SceneResources& res)
+void initPipeline(entt::registry& registry)
 {
+  auto&       ps  = registry.ctx().get<PipelineState>();
+  const auto& ctx = registry.ctx().get<VkContext>();
+  const auto& sc  = registry.ctx().get<SwapchainState>();
+  const auto& res = registry.ctx().get<SceneResources>();
+
   const auto textures = std::span<const VkDescriptorImageInfo>(res.textureDescriptors);
   // ========================================
   // Descriptor Set Layout
@@ -234,12 +240,15 @@ void initPipeline(PipelineState& ps, const VkContext& ctx, const SwapchainState&
   vkDestroyShaderModule(ctx.device, shaderModule, nullptr);
 }
 
-void destroyPipeline(PipelineState& ps, const VkContext& ctx)
+void destroyPipeline(entt::registry& registry)
 {
+  auto&       ps  = registry.ctx().get<PipelineState>();
+  const auto& ctx = registry.ctx().get<VkContext>();
+
   vkDestroyPipeline(ctx.device, ps.pipeline, nullptr);
   vkDestroyPipelineLayout(ctx.device, ps.layout, nullptr);
   vkDestroyDescriptorPool(ctx.device, ps.descPool, nullptr);  // implicitly frees descSet
   vkDestroyDescriptorSetLayout(ctx.device, ps.descSetLayout, nullptr);
 }
 
-}  // namespace renderer
+}  // namespace Renderer

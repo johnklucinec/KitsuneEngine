@@ -1,12 +1,12 @@
-#include <entt/entt.hpp>
+#include <entt/entity/registry.hpp>
 
-#include "components/input.hpp"
-#include "systems/settings.hpp"
+#include "input.hpp"
 #include "core/settings.hpp"
 #include "core/app.hpp"
 #include "core/factories.hpp"
 
-#include "temp_app.hpp"
+#include "render_system.hpp"
+#include "utils/settings_utils.hpp"
 
 int main(int argc, char* argv[])
 {
@@ -16,14 +16,13 @@ int main(int argc, char* argv[])
   registry.ctx().emplace<AppState>();
   registry.ctx().emplace<Input>();
   registry.ctx().emplace<Settings>();
-  sys::settings_init(registry, argc, argv);  // parses the settings
-                                             // registry.ctx().emplace<Settings>(parseArgs(argc, argv));
+  registry.ctx().emplace<Settings>(SettingsUtils::parseArgs(argc, argv));
 
   // Create Player
   makePlayer(registry, { 0.0F, 0.0F, -6.0F });
 
   // Init + Game Loop
-  return run(registry);
+  System::render(registry);
 
   return 0;
 }

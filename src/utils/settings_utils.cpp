@@ -1,47 +1,8 @@
-#include <entt/entt.hpp>
-#include "systems/settings.hpp"
 #include <charconv>
+#include <string_view>
+#include "utils/settings_utils.hpp"
 
-#include "renderer/swapchain.hpp"
-#include "components/input.hpp"
-#include "core/settings.hpp"
-#include "core/app.hpp"
-
-// Parse function prototype
-Settings parseArgs(int argc, char* argv[]);
-
-
-// Emplaces settings into the registry
-void sys::settings_init(entt::registry& registry, int argc, char* argv[])
-{
-  auto& settings = registry.ctx().get<Settings>();
-  settings       = parseArgs(argc, argv);
-}
-
-
-// One-shot actions
-void sys::settings_loop(entt::registry& registry)
-{
-  const auto& in       = registry.ctx().get<Input>();
-  auto&       app      = registry.ctx().get<AppState>();
-  auto&       settings = registry.ctx().get<Settings>();
-  auto&       sc       = registry.ctx().get<SwapchainState>();
-
-  if(key_just_pressed(in, Key::Escape))
-    app.running = false;
-
-  if(key_down(in, Key::LAlt) && key_just_pressed(in, Key::Return))
-  {
-    settings.fullscreen  = !settings.fullscreen;
-    sc.needsFullscreen   = true;
-    app.resize_swapchain = true;
-  }
-
-  if(key_down(in, Key::LAlt) && key_just_pressed(in, Key::Z))
-    settings.show_ui = !settings.show_ui;
-}
-
-
+namespace SettingsUtils {
 // ========================================
 // Parsing helper function
 // Should I move this to a util file?
@@ -103,3 +64,4 @@ Settings parseArgs(int argc, char* argv[])
 
   return s;
 }
+}  // namespace SettingsUtils

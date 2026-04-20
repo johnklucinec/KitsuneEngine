@@ -1,5 +1,6 @@
 #pragma once
 #include <vulkan/vulkan.h>
+#include "entt/entity/fwd.hpp"
 
 struct VkContext;
 struct SwapchainState;
@@ -14,7 +15,7 @@ struct PipelineState
   VkDescriptorSet       descSet       = VK_NULL_HANDLE;
 };
 
-namespace renderer {
-void initPipeline(PipelineState& ps, const VkContext& ctx, const SwapchainState& sc, const SceneResources& res);
-void destroyPipeline(PipelineState& ps, const VkContext& ctx);
-}  // namespace renderer
+namespace Renderer {
+void initPipeline(entt::registry& registry);
+void destroyPipeline(entt::registry& registry);
+}  // namespace Renderer

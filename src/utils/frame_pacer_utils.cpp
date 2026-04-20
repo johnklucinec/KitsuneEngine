@@ -2,13 +2,13 @@
 #include <immintrin.h>
 #include <thread>
 
-namespace utils {
+namespace PacerUtils {
 
 // ~1ms of headroom before spin-locking: lets the OS timer fire slightly early
 // without overshooting, with the spin loop covering the remaining gap precisely.
 static constexpr int64_t SPIN_GUARD_NS = 1'020'000LL;
 
-FramePacerState::Duration pacer_to_duration(double fps)
+FramePacerState::Duration pacerToDuration(double fps)
 {
   using namespace std::chrono;
 
@@ -18,7 +18,7 @@ FramePacerState::Duration pacer_to_duration(double fps)
   return duration_cast<FramePacerState::Duration>(duration<double>(1.0 / fps));
 }
 
-void pacer_sleep_until(FramePacerState::TimePoint target, const FramePacerState& state)
+void pacerSleepUntil(FramePacerState::TimePoint target, const FramePacerState& state)
 {
   using Clock = FramePacerState::Clock;
 
@@ -53,4 +53,4 @@ void pacer_sleep_until(FramePacerState::TimePoint target, const FramePacerState&
     _mm_pause();
 }
 
-}  // namespace utils
+}  // namespace PacerUtils
