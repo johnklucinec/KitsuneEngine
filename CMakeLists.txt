@@ -1,7 +1,6 @@
-# Copyright (c) 2025-2026, Sascha Willems
-# SPDX-License-Identifier: MIT
+# Copyright (c) 2025-2026, Johnny Klucinec
 
-cmake_minimum_required(VERSION 3.21 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.28 FATAL_ERROR)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
 include(FetchContent)
 
@@ -19,6 +18,7 @@ else()
     message(STATUS "Found Vulkan SDK: $ENV{VULKAN_SDK}")
 endif()
 
+# --- Global includes ---
 include_directories(external/tinyobj)
 include_directories(external/ktx/include)
 include_directories(external/ktx/other_include)
@@ -53,6 +53,15 @@ if(NOT WIN32)
     FetchContent_MakeAvailable(GLM)
 endif()
 
+# --- EnTT ---
+FetchContent_Declare(EnTT
+    GIT_REPOSITORY https://github.com/skypjack/entt.git
+    GIT_TAG v3.16.0
+    GIT_SHALLOW ON
+    EXCLUDE_FROM_ALL
+    SYSTEM)
+FetchContent_MakeAvailable(EnTT)
+
 # --- KTX ---
 set(KTX_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/ktx)
 set(KTX_SOURCES
@@ -75,17 +84,23 @@ endif()
 find_library(Slang_LIBRARY NAMES slang slang-compiler HINTS "$ENV{VULKAN_SDK}/lib" REQUIRED)
 
 # --- ImGui ---
-set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui)
+FetchContent_Declare(imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG v1.92.7
+    GIT_SHALLOW ON
+    DOWNLOAD_ONLY YES)
+FetchContent_MakeAvailable(imgui)
+
 add_library(imgui STATIC
-    ${IMGUI_DIR}/imgui.cpp
-    ${IMGUI_DIR}/imgui_draw.cpp
-    ${IMGUI_DIR}/imgui_widgets.cpp
-    ${IMGUI_DIR}/imgui_tables.cpp
-    ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
-    ${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp)
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp)
 target_include_directories(imgui PUBLIC
-    ${IMGUI_DIR}
-    ${IMGUI_DIR}/backends
+    ${imgui_SOURCE_DIR}
+    ${imgui_SOURCE_DIR}/backends
     ${Vulkan_INCLUDE_DIRS})
 target_compile_definitions(imgui PUBLIC
     VK_NO_PROTOTYPES
@@ -93,7 +108,6 @@ target_compile_definitions(imgui PUBLIC
     "IMGUI_IMPL_VULKAN_VOLK_FILENAME=<Volk/volk.h>")
 target_include_directories(imgui PRIVATE ${CMAKE_SOURCE_DIR}/external)
 
-# Point imgui at SDL3 headers — detected by whether the static target was fetched
 if(TARGET SDL3::SDL3-static)
     target_link_libraries(imgui PRIVATE SDL3::SDL3-static)
 else()
@@ -113,20 +127,47 @@ endif()
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/")
 
+# --- Collect system sources ---
+file(GLOB_RECURSE ALL_SOURCES CONFIGURE_DEPENDS
+    ${CMAKE_SOURCE_DIR}/src/*.cpp)
+
 # --- Executable ---
-add_executable(${NAME} main.cpp assets/shader.slang)
+add_executable(${NAME}
+    assets/shaders/shader.slang
+    ${ALL_SOURCES})
+
 target_compile_definitions(${NAME} PRIVATE VK_NO_PROTOTYPES)
 if(WIN32)
     target_compile_definitions(${NAME} PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
+
+# --- Include paths for src layout ---
+target_include_directories(${NAME} PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/components
+    ${CMAKE_SOURCE_DIR}/src/systems
+    ${CMAKE_SOURCE_DIR}/src/renderer
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/external
+    ${Vulkan_INCLUDE_DIRS})
+
 set_target_properties(${NAME} PROPERTIES DEBUGGER_WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_features(${NAME} PRIVATE cxx_std_20)
-target_link_libraries(${NAME} PRIVATE Vulkan::Vulkan ${SDL_TARGET} ktx ${Slang_LIBRARY} imgui)
+target_link_libraries(${NAME} PRIVATE
+    Vulkan::Vulkan
+    ${SDL_TARGET}
+    ktx
+    ${Slang_LIBRARY}
+    imgui
+    EnTT::EnTT)
+if(WIN32)
+    target_link_libraries(${NAME} PRIVATE winmm)
+endif()
 if(NOT WIN32)
     target_link_libraries(${NAME} PRIVATE glm::glm-header-only)
 endif()
 
-# --- asset/DLL copying only for static release builds ---
+# --- Asset/DLL copying only for static release builds ---
 if(STATIC_BUILD)
     if(WIN32)
         file(GLOB SLANG_DLLS "$ENV{VULKAN_SDK}/Bin/slang*.dll")
