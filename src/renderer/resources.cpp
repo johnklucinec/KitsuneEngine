@@ -7,11 +7,9 @@
 #include "tiny_obj_loader.h"
 
 #include <ktxvulkan.h>
-#include <cstring>
-#include <string>
-#include <vector>
-#include "types.hpp"
 #include <entt/entity/registry.hpp>
+#include "utils/mesh_loader.hpp"
+
 
 void Renderer::initSceneResources(entt::registry& registry)
 {
@@ -21,32 +19,16 @@ void Renderer::initSceneResources(entt::registry& registry)
 
   // ========================================
   // Load Mesh
-  tinyobj::attrib_t                attrib;
-  std::vector<tinyobj::shape_t>    shapes;
-  std::vector<tinyobj::material_t> materials;
-  chk(tinyobj::LoadObj(&attrib, &shapes, &materials, nullptr, nullptr, "assets/models/suzanne.obj"));
+  auto mesh = MeshLoader::load("assets/models/suzanne.gltf");
+  if(!mesh)
+    return;
 
-  std::vector<Vertex>   vertices;
-  std::vector<uint16_t> indices;
-
-  // Load vertex and index data
-  for(auto& index : shapes[0].mesh.indices)
-  {
-    Vertex v{
-      .pos    = { attrib.vertices[index.vertex_index * 3], -attrib.vertices[index.vertex_index * 3 + 1], attrib.vertices[index.vertex_index * 3 + 2] },
-      .normal = { attrib.normals[index.normal_index * 3], -attrib.normals[index.normal_index * 3 + 1], attrib.normals[index.normal_index * 3 + 2] },
-      .uv     = { attrib.texcoords[index.texcoord_index * 2], 1.0f - attrib.texcoords[index.texcoord_index * 2 + 1] }
-    };
-    vertices.push_back(v);
-    indices.push_back(static_cast<uint16_t>(indices.size()));
-  }
-
-  res.indexCount = static_cast<uint32_t>(indices.size());
+  res.indexCount = static_cast<uint32_t>(mesh->indices.size());
 
   // ========================================
   // Allocate vertex + index buffer
-  VkDeviceSize       vBufSize{ sizeof(Vertex) * vertices.size() };
-  VkDeviceSize       iBufSize{ sizeof(uint16_t) * indices.size() };
+  VkDeviceSize       vBufSize{ sizeof(Vertex) * mesh->vertices.size() };
+  VkDeviceSize       iBufSize{ sizeof(uint16_t) * mesh->indices.size() };
   VkBufferCreateInfo bufferCI{
     .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
     .size  = vBufSize + iBufSize,
@@ -67,8 +49,8 @@ void Renderer::initSceneResources(entt::registry& registry)
   chk(vmaCreateBuffer(ctx.allocator, &bufferCI, &vBufferAllocCI, &res.vBuffer, &res.vBufferAlloc, &vBufferAllocInfo));
 
   // Write directly into VRAM via persistently mapped ReBAR memory
-  memcpy(vBufferAllocInfo.pMappedData, vertices.data(), vBufSize);
-  memcpy(static_cast<char*>(vBufferAllocInfo.pMappedData) + vBufSize, indices.data(), iBufSize);
+  memcpy(vBufferAllocInfo.pMappedData, mesh->vertices.data(), vBufSize);
+  memcpy(static_cast<char*>(vBufferAllocInfo.pMappedData) + vBufSize, mesh->indices.data(), iBufSize);
 
   // ========================================
   // Shader Data Buffers (one per frame-in-flight)

@@ -62,6 +62,15 @@ FetchContent_Declare(EnTT
     SYSTEM)
 FetchContent_MakeAvailable(EnTT)
 
+# --- fastgltf ---
+FetchContent_Declare(fastgltf
+    GIT_REPOSITORY https://github.com/spnda/fastgltf.git
+    GIT_TAG v0.9.0
+    GIT_SHALLOW ON
+    EXCLUDE_FROM_ALL
+    SYSTEM)
+FetchContent_MakeAvailable(fastgltf)
+
 # --- KTX ---
 set(KTX_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/ktx)
 set(KTX_SOURCES
@@ -159,7 +168,8 @@ target_link_libraries(${NAME} PRIVATE
     ktx
     ${Slang_LIBRARY}
     imgui
-    EnTT::EnTT)
+    EnTT::EnTT
+    fastgltf)
 if(WIN32)
     target_link_libraries(${NAME} PRIVATE winmm)
 endif()

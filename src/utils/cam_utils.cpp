@@ -14,7 +14,9 @@ glm::mat4 CamUtils::viewMatrix(const Camera& cam, const Transform& transform) no
 
 glm::mat4 CamUtils::projMatrix(const Camera& cam, float aspect) noexcept
 {
-  return glm::perspective(vfovFromHfov(cam.fov), aspect, cam.z_near, cam.z_far);
+  glm::mat4 proj = glm::perspective(vfovFromHfov(cam.fov), aspect, cam.z_near, cam.z_far);
+  proj[1][1] *= -1.0f;  // Vulkan clip space is Y-down.
+  return proj;
 }
 
 // Takes a horizontal FOV in degrees and returns a vertical FOV in radians, which is what glm::perspective() wants.

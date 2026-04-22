@@ -27,7 +27,7 @@ struct RenderCache
 static RenderCache rc{};
 }  // namespace
 
-int TEMP_INSTANCE_COUNT = 10;
+int TEMP_INSTANCE_COUNT = 3;
 
 void RenderLoop::init(entt::registry& registry)
 {
