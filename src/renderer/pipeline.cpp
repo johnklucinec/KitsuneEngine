@@ -138,7 +138,7 @@ void initPipeline(entt::registry& registry)
   // Graphics Pipeline Layout
   VkPushConstantRange pushConstantRange{
     .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-    .size       = sizeof(VkDeviceAddress),
+    .size       = sizeof(PushConstants),
   };
   VkPipelineLayoutCreateInfo pipelineLayoutCI{
     .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,

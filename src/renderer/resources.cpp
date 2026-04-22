@@ -70,37 +70,65 @@ void Renderer::initSceneResources(entt::registry& registry)
   memcpy(vBufferAllocInfo.pMappedData, vertices.data(), vBufSize);
   memcpy(static_cast<char*>(vBufferAllocInfo.pMappedData) + vBufSize, indices.data(), iBufSize);
 
-
   // ========================================
   // Shader Data Buffers (one per frame-in-flight)
   for(uint32_t i = 0; i < fs.framesInFlight; i++)
   {
-    VkBufferCreateInfo uBufferCI{
+    VkBufferCreateInfo frameDataCI{
       .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
       .size  = sizeof(ShaderData),
       .usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,  // Buffer accessible via raw pointer in shader
     };
-    VmaAllocationCreateInfo uBufferAllocCI{
-      .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT
-               | VMA_ALLOCATION_CREATE_MAPPED_BIT,  // Persistently mapped; CPU/GPU accessible
+    VmaAllocationCreateInfo frameDataAllocCI{
+      .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
       .usage = VMA_MEMORY_USAGE_AUTO,
     };
-    chk(vmaCreateBuffer(ctx.allocator, &uBufferCI, &uBufferAllocCI, &res.shaderDataBuffers[i].buffer, &res.shaderDataBuffers[i].allocation,
+    chk(vmaCreateBuffer(ctx.allocator, &frameDataCI, &frameDataAllocCI, &res.shaderDataBuffers[i].buffer, &res.shaderDataBuffers[i].allocation,
                         &res.shaderDataBuffers[i].allocationInfo));
 
     // Grab and store buffer's device address
-    VkBufferDeviceAddressInfo uBufferBdaInfo{ .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = res.shaderDataBuffers[i].buffer };
-    res.shaderDataBuffers[i].deviceAddress = vkGetBufferDeviceAddress(ctx.device, &uBufferBdaInfo);
+    VkBufferDeviceAddressInfo bdaInfo{
+      .sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+      .buffer = res.shaderDataBuffers[i].buffer,
+    };
+    res.shaderDataBuffers[i].deviceAddress = vkGetBufferDeviceAddress(ctx.device, &bdaInfo);
   }
 
+  // ========================================
+  // Instance SSBO (dynamic, one per frame-in-flight)
+  constexpr uint32_t MAX_INSTANCES = 1024;
+
+  for(uint32_t i = 0; i < fs.framesInFlight; i++)
+  {
+    VkBufferCreateInfo ssboCI{
+      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+      .size  = sizeof(InstanceData) * MAX_INSTANCES,
+      .usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+    };
+    VmaAllocationCreateInfo ssboAllocCI{
+      .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+      .usage = VMA_MEMORY_USAGE_AUTO,
+    };
+    chk(vmaCreateBuffer(ctx.allocator, &ssboCI, &ssboAllocCI, &res.instanceBuffers[i].buffer, &res.instanceBuffers[i].allocation, &res.instanceBuffers[i].allocationInfo));
+
+    VkBufferDeviceAddressInfo bdaInfo{
+      .sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+      .buffer = res.instanceBuffers[i].buffer,
+    };
+    res.instanceBuffers[i].deviceAddress = vkGetBufferDeviceAddress(ctx.device, &bdaInfo);
+  }
 
   // ========================================
   // Load Textures
+  int TEMP_INSTANCE_COUNT = 3;
+  res.textures.resize(TEMP_INSTANCE_COUNT);
+  // res.textures.resize(registry.view<TexturePath>().size
+
   std::vector<VkDescriptorImageInfo> textureDescriptors;
   for(int i = 0; i < static_cast<int>(res.textures.size()); i++)
   {
     ktxTexture* ktxTex{ nullptr };
-    std::string filename = "assets/models/suzanne" + std::to_string(i % 3) + ".ktx";  //TODO: Remove % 3 when I dont use INSTANCE_COUNT
+    std::string filename = "assets/models/suzanne" + std::to_string(i) + ".ktx";
     chk(ktxTexture_CreateFromNamedFile(filename.c_str(), KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &ktxTex));
 
     // Create image
@@ -272,7 +300,11 @@ void Renderer::destroySceneResources(entt::registry& registry)
     vkDestroyImageView(ctx.device, tex.view, nullptr);
     vmaDestroyImage(ctx.allocator, tex.image, tex.allocation);
   }
+
   for(auto& sdb : res.shaderDataBuffers)
+    vmaDestroyBuffer(ctx.allocator, sdb.buffer, sdb.allocation);
+
+  for(auto& sdb : res.instanceBuffers)
     vmaDestroyBuffer(ctx.allocator, sdb.buffer, sdb.allocation);
 
   vmaDestroyBuffer(ctx.allocator, res.vBuffer, res.vBufferAlloc);

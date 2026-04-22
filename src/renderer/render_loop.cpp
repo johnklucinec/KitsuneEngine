@@ -15,6 +15,7 @@
 #include "transform.hpp"
 #include "camera.hpp"
 #include "tags.hpp"
+#include "types.hpp"
 
 #include "hud_system.hpp"
 
@@ -26,19 +27,21 @@ struct RenderCache
 static RenderCache rc{};
 }  // namespace
 
+int TEMP_INSTANCE_COUNT = 10;
+
 void RenderLoop::init(entt::registry& registry)
 {
   auto& fs  = registry.ctx().get<FrameState>();
   auto& res = registry.ctx().get<SceneResources>();
 
-  for(auto i = 0; i < INSTANCE_COUNT; i++)
-  {
-    auto instancePos        = glm::vec3((float)(i - 1) * 3.0f, 0.0f, 0.0f);
-    res.shaderData.model[i] = glm::translate(glm::mat4(1.0f), instancePos);  // static, no rotation
-  }
 
   for(uint32_t i = 0; i < fs.framesInFlight; i++)
-    memcpy(res.shaderDataBuffers[i].allocationInfo.pMappedData, &res.shaderData, sizeof(ShaderData));
+  {
+    auto* instances = static_cast<InstanceData*>(res.instanceBuffers[i].allocationInfo.pMappedData);
+
+    for(int j = 0; j < TEMP_INSTANCE_COUNT; j++)
+      instances[j].model = glm::translate(glm::mat4(1.0f), glm::vec3((float)(j - 1) * 3.0f, 0.0f, 0.0f));
+  }
 
   rc.playerEntity = registry.view<PlayerTag>().front();
   assert(rc.playerEntity != entt::null);
@@ -72,11 +75,12 @@ void RenderLoop::updateShaderData(entt::registry& registry)
   auto& fs  = registry.ctx().get<FrameState>();
   auto& res = registry.ctx().get<SceneResources>();
 
-  const auto& world         = registry.get<CameraViewMatrix>(rc.playerEntity);
-  const auto& proj          = registry.get<ProjectionMatrix>(rc.playerEntity);
-  res.shaderData.view       = world.matrix;
-  res.shaderData.projection = proj.matrix;
-  memcpy(res.shaderDataBuffers[fs.frameIndex].allocationInfo.pMappedData, &res.shaderData, sizeof(ShaderData));
+  const auto& world = registry.get<CameraViewMatrix>(rc.playerEntity);
+  const auto& proj  = registry.get<ProjectionMatrix>(rc.playerEntity);
+
+  auto* fd       = static_cast<ShaderData*>(res.shaderDataBuffers[fs.frameIndex].allocationInfo.pMappedData);
+  fd->view       = world.matrix;
+  fd->projection = proj.matrix;
 }
 
 void RenderLoop::recordCommandBuffer(entt::registry& registry)
@@ -177,11 +181,16 @@ void RenderLoop::recordCommandBuffer(entt::registry& registry)
   vkCmdBindVertexBuffers(cb, 0, 1, &res.vBuffer, &vOffset);
   vkCmdBindIndexBuffer(cb, res.vBuffer, res.indexOffset, VK_INDEX_TYPE_UINT16);
 
+  PushConstants pushConstants{
+    .shaderData = res.shaderDataBuffers[fs.frameIndex].deviceAddress,
+    .instances = res.instanceBuffers[fs.frameIndex].deviceAddress,
+  };
+
   // Pass the address of the current frame's shader data buffer via a push constant to the shaders
-  vkCmdPushConstants(cb, ps.layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress), &res.shaderDataBuffers[fs.frameIndex].deviceAddress);
+  vkCmdPushConstants(cb, ps.layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
 
   // Draw mesh
-  vkCmdDrawIndexed(cb, res.indexCount, INSTANCE_COUNT, 0, 0, 0);
+  vkCmdDrawIndexed(cb, res.indexCount, TEMP_INSTANCE_COUNT, 0, 0, 0);
 
   // Build and draw HUD
   System::hudDraw(registry);

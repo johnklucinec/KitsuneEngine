@@ -13,8 +13,12 @@ struct ShaderData
 {
   float4x4 projection;
   float4x4 view;
-  float4x4 model[INSTANCE_COUNT];
   float4   lightPos;
+};
+
+struct InstanceData
+{
+  float4x4 model;
 };
 
 struct VSOutput
@@ -28,10 +32,10 @@ struct VSOutput
 };
 
 [shader("vertex")]
-VSOutput main(VSInput input, uniform ShaderData* shaderData, uint instanceIndex: SV_VulkanInstanceID)
+VSOutput main(VSInput input, uniform ShaderData* shaderData, uniform InstanceData* instances, uint instanceIndex: SV_VulkanInstanceID)
 {
   VSOutput output;
-  float4x4 modelMat = shaderData->model[instanceIndex];
+  float4x4 modelMat = instances[instanceIndex].model;
 
   output.Normal        = mul((float3x3)mul(shaderData->view, modelMat), input.Normal);
   output.UV            = input.UV;
