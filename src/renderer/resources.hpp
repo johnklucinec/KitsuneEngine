@@ -22,6 +22,8 @@ struct ShaderData  // Look into scalarBlockLayout
 struct InstanceData
 {
   glm::mat4 model;
+  uint32_t  textureIndex;  // which slot in res.textureDescriptors to sample
+  uint32_t  _pad[3];       // keep 16-byte alignment for the SSBO
 };
 
 struct ShaderDataBuffer
@@ -40,12 +42,19 @@ struct Texture
   VkSampler     sampler    = VK_NULL_HANDLE;
 };
 
+struct MeshResource
+{
+  VkBuffer      buffer      = VK_NULL_HANDLE;
+  VmaAllocation allocation  = VK_NULL_HANDLE;
+  VkDeviceSize  indexOffset = 0;
+  uint32_t      indexCount  = 0;
+  uint32_t      instanceCount{};  // how many instances of this mesh
+  uint32_t      firstInstance{};  // starting offset into the instance SSBO
+};
+
 struct SceneResources
 {
-  VkBuffer                                           vBuffer      = VK_NULL_HANDLE;
-  VmaAllocation                                      vBufferAlloc = VK_NULL_HANDLE;
-  uint32_t                                           indexCount   = 0;
-  VkDeviceSize                                       indexOffset  = 0;
+  std::vector<MeshResource>                          meshes;
   std::array<ShaderDataBuffer, MAX_FRAMES_IN_FLIGHT> shaderDataBuffers;
   std::array<ShaderDataBuffer, MAX_FRAMES_IN_FLIGHT> instanceBuffers;
   std::vector<Texture>                               textures;
@@ -54,6 +63,9 @@ struct SceneResources
 };
 
 namespace Renderer {
-void initSceneResources(entt::registry& registry);
-void destroySceneResources(entt::registry& registry);
+void     initSceneResources(entt::registry& registry);
+uint32_t loadMesh(const std::string& path, entt::registry& registry);
+uint32_t loadTexture(const std::string& path, entt::registry& registry);
+void     updateDescriptorSets(entt::registry& registry);
+void     destroySceneResources(entt::registry& registry);
 }  // namespace Renderer

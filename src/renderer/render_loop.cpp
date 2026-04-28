@@ -27,20 +27,35 @@ struct RenderCache
 static RenderCache rc{};
 }  // namespace
 
-int TEMP_INSTANCE_COUNT = 3;
-
 void RenderLoop::init(entt::registry& registry)
 {
   auto& fs  = registry.ctx().get<FrameState>();
   auto& res = registry.ctx().get<SceneResources>();
 
+  int32_t suzanneMesh = Renderer::loadMesh("assets/models/suzanne.gltf", registry);
+
+  // ========================================
+  // Load Textures
+  // Eventually, my texture loading system should do this I think.
+  uint32_t tex0 = Renderer::loadTexture("assets/models/suzanne0.ktx", registry);
+  uint32_t tex1 = Renderer::loadTexture("assets/models/suzanne1.ktx", registry);
+  uint32_t tex2 = Renderer::loadTexture("assets/models/suzanne2.ktx", registry);
+
+  // Call after loading textures
+  Renderer::updateDescriptorSets(registry);
+
+  auto& mesh         = res.meshes[0];
+  mesh.instanceCount = 5;
+  mesh.firstInstance = 0;  // starts at slot 0 in the instance SSBO
 
   for(uint32_t i = 0; i < fs.framesInFlight; i++)
   {
     auto* instances = static_cast<InstanceData*>(res.instanceBuffers[i].allocationInfo.pMappedData);
-
-    for(int j = 0; j < TEMP_INSTANCE_COUNT; j++)
-      instances[j].model = glm::translate(glm::mat4(1.0f), glm::vec3((float)(j - 1) * 3.0f, 0.0f, 0.0f));
+    instances[0]    = { glm::translate(glm::mat4(1.f), glm::vec3(-3.f, 0.f, 0.f)), tex0 };
+    instances[1]    = { glm::translate(glm::mat4(1.f), glm::vec3(0.f, 0.f, 0.f)), tex1 };
+    instances[2]    = { glm::translate(glm::mat4(1.f), glm::vec3(3.f, 0.f, 0.f)), tex2 };
+    instances[3]    = { glm::translate(glm::mat4(1.f), glm::vec3(-2.f, 3.f, 0.f)), tex0 };
+    instances[4]    = { glm::translate(glm::mat4(1.f), glm::vec3(2.f, 3.f, 0.f)), tex1 };
   }
 
   rc.playerEntity = registry.view<PlayerTag>().front();
@@ -50,6 +65,7 @@ void RenderLoop::init(entt::registry& registry)
   System::hudInit(registry);
 }
 
+
 void RenderLoop::waitForFences(entt::registry& registry)
 {
   auto& ctx   = registry.ctx().get<VkContext>();
@@ -58,6 +74,7 @@ void RenderLoop::waitForFences(entt::registry& registry)
   chk(vkWaitForFences(ctx.device, 1, &frame.fence, true, UINT64_MAX));  // Wait for last frame GPU is working on
   chk(vkResetFences(ctx.device, 1, &frame.fence));                      // Reset for next submission
 }
+
 
 void RenderLoop::acquireNextImage(entt::registry& registry)
 {
@@ -69,6 +86,7 @@ void RenderLoop::acquireNextImage(entt::registry& registry)
   if(chkSwapchain(vkAcquireNextImageKHR(ctx.device, sc.swapchain, UINT64_MAX, frame.presentSem, VK_NULL_HANDLE, &sc.imageIndex)))
     app.resize_swapchain = true;
 }
+
 
 void RenderLoop::updateShaderData(entt::registry& registry)
 {
@@ -82,6 +100,7 @@ void RenderLoop::updateShaderData(entt::registry& registry)
   fd->view       = world.matrix;
   fd->projection = proj.matrix;
 }
+
 
 void RenderLoop::recordCommandBuffer(entt::registry& registry)
 {
@@ -173,24 +192,26 @@ void RenderLoop::recordCommandBuffer(entt::registry& registry)
     .extent{ .width = sc.extent.width, .height = sc.extent.height }
   };
 
-  // Bind resources involved in rendering the 3D objects
+  // Bind pipeline, descriptor set, and push constants once for all meshes
   vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, ps.pipeline);
   vkCmdSetScissor(cb, 0, 1, &scissor);
   vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, ps.layout, 0, 1, &ps.descSet, 0, nullptr);
-  VkDeviceSize vOffset{ 0 };
-  vkCmdBindVertexBuffers(cb, 0, 1, &res.vBuffer, &vOffset);
-  vkCmdBindIndexBuffer(cb, res.vBuffer, res.indexOffset, VK_INDEX_TYPE_UINT16);
 
   PushConstants pushConstants{
     .shaderData = res.shaderDataBuffers[fs.frameIndex].deviceAddress,
-    .instances = res.instanceBuffers[fs.frameIndex].deviceAddress,
+    .instances  = res.instanceBuffers[fs.frameIndex].deviceAddress,
   };
-
   // Pass the address of the current frame's shader data buffer via a push constant to the shaders
   vkCmdPushConstants(cb, ps.layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
 
-  // Draw mesh
-  vkCmdDrawIndexed(cb, res.indexCount, TEMP_INSTANCE_COUNT, 0, 0, 0);
+  // Per-mesh: bind its buffer and draw its instances
+  for(const auto& mesh : res.meshes)
+  {
+    VkDeviceSize vOffset{ 0 };
+    vkCmdBindVertexBuffers(cb, 0, 1, &mesh.buffer, &vOffset);
+    vkCmdBindIndexBuffer(cb, mesh.buffer, mesh.indexOffset, VK_INDEX_TYPE_UINT16);
+    vkCmdDrawIndexed(cb, mesh.indexCount, mesh.instanceCount, 0, 0, mesh.firstInstance);  // Draw mesh
+  }
 
   // Build and draw HUD
   System::hudDraw(registry);

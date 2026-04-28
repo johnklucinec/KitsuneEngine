@@ -14,10 +14,12 @@ inline constexpr std::string_view BOLD_RED = "\033[1;31m";
 
 // Example:
 // Log::error("ERROR", "Failed to do something", std::source_location::current());
-inline void error(std::string_view type, std::string_view msg, const std::source_location loc)
+inline void error(std::string_view type, std::string_view msg, std::source_location loc = std::source_location::current())
 {
   std::cerr << Color::BOLD_RED << "[" << type << "] " << Color::RESET << Color::BOLD << "in " << loc.function_name() << Color::RESET << "\n"
             << Color::GRAY << "  at " << loc.file_name() << ":" << loc.line() << Color::RESET << "\n"
             << "  " << Color::CYAN << "> " << Color::RESET << msg << "\n\n";
 }
 }  // namespace Log
+
+// TODO: Make a error_assert function.

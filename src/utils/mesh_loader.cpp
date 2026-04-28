@@ -37,7 +37,7 @@ std::optional<MeshData> load(std::string_view path, std::source_location loc)
     {
       const size_t base_vtx = out.vertices.size();
 
-      // Position is mandatory for our MeshData
+      // Position is mandatory for MeshData
       auto* posAttr = prim.findAttribute("POSITION");
       if(posAttr == prim.attributes.end())
         continue;
@@ -53,24 +53,22 @@ std::optional<MeshData> load(std::string_view path, std::source_location loc)
       {
         auto& idxAcc = gltf.accessors[*prim.indicesAccessor];
         out.indices.reserve(out.indices.size() + idxAcc.count);
-        fastgltf::iterateAccessor<uint32_t>(gltf, idxAcc, [&](uint32_t idx) { out.indices.push_back(static_cast<uint16_t>(base_vtx + idx)); });
+        fastgltf::iterateAccessor<uint32_t>(gltf, idxAcc, [&](uint32_t idx) {
+          assert((base_vtx + idx) <= std::numeric_limits<uint16_t>::max() && "Index exceeds uint16_t range — switch to uint32_t");
+          out.indices.push_back(static_cast<uint16_t>(base_vtx + idx));
+        });
       }
 
       // Extract Normals & UVs
-      auto loadAttr = [&](const char* name, auto& field) {
+      auto loadAttr = [&]<typename T>(const char* name, T Vertex::* field) {
         if(auto* attr = prim.findAttribute(name); attr != prim.attributes.end())
         {
-          fastgltf::iterateAccessorWithIndex<decltype(field)>(gltf, gltf.accessors[attr->accessorIndex],
-                                                              [&](auto v, size_t i) { out.vertices[base_vtx + i].*field = v; });
+          fastgltf::iterateAccessorWithIndex<T>(gltf, gltf.accessors[attr->accessorIndex], [&](T v, size_t i) { out.vertices[base_vtx + i].*field = v; });
         }
       };
 
-      if(auto* n = prim.findAttribute("NORMAL"))
-        fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, gltf.accessors[n->accessorIndex],
-                                                      [&](glm::vec3 v, size_t i) { out.vertices[base_vtx + i].normal = v; });
-
-      if(auto* t = prim.findAttribute("TEXCOORD_0"))
-        fastgltf::iterateAccessorWithIndex<glm::vec2>(gltf, gltf.accessors[t->accessorIndex], [&](glm::vec2 v, size_t i) { out.vertices[base_vtx + i].uv = v; });
+      loadAttr("NORMAL", &Vertex::normal);
+      loadAttr("TEXCOORD_0", &Vertex::uv);
     }
   }
 

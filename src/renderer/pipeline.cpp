@@ -1,14 +1,12 @@
 #include "pipeline.hpp"
 #include "context.hpp"
 #include "swapchain.hpp"
-#include "resources.hpp"
 #include "types.hpp"
 
 #include <slang/slang.h>
 #include <slang/slang-com-ptr.h>
 #include <array>
 #include <cassert>
-#include <span>
 #include "common.hpp"
 #include "entt/entity/registry.hpp"
 
@@ -19,9 +17,7 @@ void initPipeline(entt::registry& registry)
   auto&       ps  = registry.ctx().get<PipelineState>();
   const auto& ctx = registry.ctx().get<VkContext>();
   const auto& sc  = registry.ctx().get<SwapchainState>();
-  const auto& res = registry.ctx().get<SceneResources>();
 
-  const auto textures = std::span<const VkDescriptorImageInfo>(res.textureDescriptors);
   // ========================================
   // Descriptor Set Layout
   VkDescriptorBindingFlags descVariableFlag{ VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT };
@@ -34,7 +30,7 @@ void initPipeline(entt::registry& registry)
   };
   VkDescriptorSetLayoutBinding descLayoutBindingTex{
     .descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,  // Will be combining textures and samplers
-    .descriptorCount = static_cast<uint32_t>(textures.size()),
+    .descriptorCount = MAX_TEXTURES,
     .stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT,
   };
   VkDescriptorSetLayoutCreateInfo descLayoutCI{
@@ -50,7 +46,7 @@ void initPipeline(entt::registry& registry)
   // Allocate Descriptor Pool
   VkDescriptorPoolSize poolSize{
     .type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-    .descriptorCount = static_cast<uint32_t>(textures.size()) + 1,  // As many descriptors for images + samplers per texture + 1 for ImGui
+    .descriptorCount = MAX_TEXTURES + 1,  // +1 for ImGui
   };
   VkDescriptorPoolCreateInfo descPoolCI{
     .sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -63,7 +59,7 @@ void initPipeline(entt::registry& registry)
 
   // ========================================
   // Descriptor Set Allocation + Update
-  uint32_t variableDescCount{ static_cast<uint32_t>(textures.size()) };
+  uint32_t variableDescCount{ MAX_TEXTURES };
   // Allocate descriptor sets from that pool
   VkDescriptorSetVariableDescriptorCountAllocateInfo variableDescCountAI{
     .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT,
@@ -78,16 +74,6 @@ void initPipeline(entt::registry& registry)
     .pSetLayouts        = &ps.descSetLayout,  // Interface to our shaders
   };
   chk(vkAllocateDescriptorSets(ctx.device, &descSetAI, &ps.descSet));
-
-  VkWriteDescriptorSet writeDescSet{
-    .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-    .dstSet          = ps.descSet,
-    .dstBinding      = 0,
-    .descriptorCount = static_cast<uint32_t>(textures.size()),
-    .descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-    .pImageInfo      = textures.data(),
-  };
-  vkUpdateDescriptorSets(ctx.device, 1, &writeDescSet, 0, nullptr);  // Contains the actual descriptor data
 
   // ========================================
   // Shader Loading (Slang → SPIR-V)
