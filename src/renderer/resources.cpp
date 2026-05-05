@@ -9,6 +9,7 @@
 #include "utils/mesh_loader.hpp"
 #include <glm/gtc/matrix_transform.hpp>
 
+constexpr uint32_t MAX_INSTANCES = 1024;
 
 void Renderer::initSceneResources(entt::registry& registry)
 {
@@ -42,8 +43,6 @@ void Renderer::initSceneResources(entt::registry& registry)
 
   // ========================================
   // Instance SSBO (dynamic, one per frame-in-flight)
-  constexpr uint32_t MAX_INSTANCES = 1024;
-
   for(uint32_t i = 0; i < fs.framesInFlight; i++)
   {
     VkBufferCreateInfo ssboCI{
@@ -63,7 +62,6 @@ void Renderer::initSceneResources(entt::registry& registry)
     };
     res.instanceBuffers[i].deviceAddress = vkGetBufferDeviceAddress(ctx.device, &bdaInfo);
   }
-
 }
 
 void Renderer::destroySceneResources(entt::registry& registry)
@@ -88,6 +86,8 @@ void Renderer::destroySceneResources(entt::registry& registry)
     vmaDestroyBuffer(ctx.allocator, mr.buffer, mr.allocation);
 }
 
+
+// ========================================
 // Updates the descriptor sets with the latest texture descriptors
 void Renderer::updateDescriptorSets(entt::registry& registry)
 {
@@ -117,6 +117,10 @@ uint32_t Renderer::loadMesh(const std::string& path, entt::registry& registry)
 
   auto&       res = registry.ctx().get<SceneResources>();
   const auto& ctx = registry.ctx().get<VkContext>();
+
+  // Return existing handle if already loaded
+  if(auto it = res.meshCache.find(path); it != res.meshCache.end())
+    return it->second;
 
   // ========================================
   // Cleanup if mesh loading fails
@@ -166,13 +170,21 @@ uint32_t Renderer::loadMesh(const std::string& path, entt::registry& registry)
 
   uint32_t handle = static_cast<uint32_t>(res.meshes.size());
   res.meshes.push_back(mr);
+  res.meshCache[path] = handle;  // Register the handle in the cache
   return handle;
 }
 
+
+// ========================================
+// Load a texture from a file and return its handle
 uint32_t Renderer::loadTexture(const std::string& path, entt::registry& registry)
 {
   auto&       res = registry.ctx().get<SceneResources>();
   const auto& ctx = registry.ctx().get<VkContext>();
+
+  // Return existing handle if already loaded
+  if(auto it = res.textureCache.find(path); it != res.textureCache.end())
+    return it->second;
 
   Texture tex{};
 
@@ -337,5 +349,6 @@ uint32_t Renderer::loadTexture(const std::string& path, entt::registry& registry
       .imageLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
   });
 
-  return handle;  // this is the index into textureDescriptors
+  res.textureCache[path] = handle;  // Register the handle in the cache
+  return handle;                    // this is the index into textureDescriptors
 }

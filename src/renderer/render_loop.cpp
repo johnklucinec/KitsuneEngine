@@ -5,6 +5,7 @@
 #include "core/app.hpp"
 
 #include "render_loop.hpp"
+#include "mesh.hpp"
 #include "renderer/context.hpp"
 #include "renderer/swapchain.hpp"
 #include "renderer/frame.hpp"
@@ -19,10 +20,24 @@
 
 #include "hud_system.hpp"
 
+struct MeshDrawParams
+{
+  uint32_t instanceCount;
+  uint32_t firstInstance;
+};
+
+// TODO: Move this somewhere else or use the one in camera.
+inline glm::mat4 toMatrix(const Transform& t)
+{
+  return glm::translate(glm::mat4{ 1.f }, t.position) * glm::mat4_cast(t.rotation) * glm::scale(glm::mat4{ 1.f }, t.scale);
+}
+
 namespace {
 struct RenderCache
 {
-  entt::entity playerEntity;
+  entt::entity                               playerEntity;
+  std::vector<InstanceData>                  staticInstances;
+  std::vector<std::pair<uint32_t, uint32_t>> staticMesh;
 };
 static RenderCache rc{};
 }  // namespace
@@ -32,6 +47,7 @@ void RenderLoop::init(entt::registry& registry)
   auto& fs  = registry.ctx().get<FrameState>();
   auto& res = registry.ctx().get<SceneResources>();
 
+  // TODO: Textures and meshes should use MeshInstance and TextureInstance??
   int32_t suzanneMesh = Renderer::loadMesh("assets/models/suzanne.gltf", registry);
 
   // ========================================
@@ -44,18 +60,45 @@ void RenderLoop::init(entt::registry& registry)
   // Call after loading textures
   Renderer::updateDescriptorSets(registry);
 
-  auto& mesh         = res.meshes[0];
-  mesh.instanceCount = 5;
-  mesh.firstInstance = 0;  // starts at slot 0 in the instance SSBO
-
-  for(uint32_t i = 0; i < fs.framesInFlight; i++)
+  for(int i = 0; i < 3; ++i)
   {
-    auto* instances = static_cast<InstanceData*>(res.instanceBuffers[i].allocationInfo.pMappedData);
-    instances[0]    = { glm::translate(glm::mat4(1.f), glm::vec3(-3.f, 0.f, 0.f)), tex0 };
-    instances[1]    = { glm::translate(glm::mat4(1.f), glm::vec3(0.f, 0.f, 0.f)), tex1 };
-    instances[2]    = { glm::translate(glm::mat4(1.f), glm::vec3(3.f, 0.f, 0.f)), tex2 };
-    instances[3]    = { glm::translate(glm::mat4(1.f), glm::vec3(-2.f, 3.f, 0.f)), tex0 };
-    instances[4]    = { glm::translate(glm::mat4(1.f), glm::vec3(2.f, 3.f, 0.f)), tex1 };
+    auto e = registry.create();
+    registry.emplace<Transform>(e, glm::vec3(i * 3.f - 3.f, 0.f, 0.f), glm::identity<glm::quat>(), glm::vec3{ 1.f });
+    registry.emplace<MeshInstance>(e, 0u);
+    registry.emplace<TextureInstance>(e, tex0);
+  }
+
+  for(int i = 0; i < 2; ++i)
+  {
+    auto e = registry.create();
+    registry.emplace<Transform>(e, glm::vec3(i * 3.f - 1.5f, 3.f, 0.f), glm::identity<glm::quat>(), glm::vec3{ 1.f });
+    registry.emplace<MeshInstance>(e, 0u);
+    registry.emplace<TextureInstance>(e, tex1);
+  }
+
+  // Separate static entities into rc.staticInstances once
+  {
+    uint32_t slot = 0;
+    for(uint32_t meshIdx = 0; meshIdx < res.meshes.size(); ++meshIdx)
+    {
+      // everything NOT dirty = static
+      auto     view  = registry.view<Transform, MeshInstance, TextureInstance>(entt::exclude<DirtyTransform>);
+      uint32_t count = 0;
+
+      for(auto e : view)
+      {
+        if(view.get<MeshInstance>(e).meshIndex != meshIdx)
+          continue;
+
+        const auto& t  = view.get<Transform>(e);
+        const auto& ti = view.get<TextureInstance>(e);
+        rc.staticInstances.push_back({ toMatrix(t), ti.textureIndex });
+        ++count;
+      }
+
+      rc.staticMesh.push_back({ slot, count });
+      slot += count;
+    }
   }
 
   rc.playerEntity = registry.view<PlayerTag>().front();
@@ -205,12 +248,25 @@ void RenderLoop::recordCommandBuffer(entt::registry& registry)
   vkCmdPushConstants(cb, ps.layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
 
   // Per-mesh: bind its buffer and draw its instances
-  for(const auto& mesh : res.meshes)
+  uint32_t runningOffset = 0;
+  for(uint32_t meshIdx = 0; meshIdx < res.meshes.size(); ++meshIdx)
   {
+    uint32_t count = 0;
+    auto     view  = registry.view<MeshInstance>();
+
+    for(auto e : view)
+      if(view.get<MeshInstance>(e).meshIndex == meshIdx)
+        ++count;
+
+    if(count == 0)
+      continue;
+
+    const auto&  mesh = res.meshes[meshIdx];
     VkDeviceSize vOffset{ 0 };
     vkCmdBindVertexBuffers(cb, 0, 1, &mesh.buffer, &vOffset);
     vkCmdBindIndexBuffer(cb, mesh.buffer, mesh.indexOffset, VK_INDEX_TYPE_UINT16);
-    vkCmdDrawIndexed(cb, mesh.indexCount, mesh.instanceCount, 0, 0, mesh.firstInstance);  // Draw mesh
+    vkCmdDrawIndexed(cb, mesh.indexCount, count, 0, 0, runningOffset);
+    runningOffset += count;
   }
 
   // Build and draw HUD
@@ -238,6 +294,39 @@ void RenderLoop::recordCommandBuffer(entt::registry& registry)
   };
   vkCmdPipelineBarrier2(cb, &barrierPresentDependencyInfo);
   chk(vkEndCommandBuffer(cb));  // End recording to the command buffer
+}
+
+void RenderLoop::updateInstanceBuffer(entt::registry& registry)
+{
+  auto& fs  = registry.ctx().get<FrameState>();
+  auto& res = registry.ctx().get<SceneResources>();
+
+  auto* instances = static_cast<InstanceData*>(res.instanceBuffers[fs.frameIndex].allocationInfo.pMappedData);
+
+  // 1. Copy cached static instances
+  std::memcpy(instances, rc.staticInstances.data(), rc.staticInstances.size() * sizeof(InstanceData));
+
+  // 2. Recompute only dirty (dynamic) entities
+  uint32_t slot = static_cast<uint32_t>(rc.staticInstances.size());
+  for(uint32_t meshIdx = 0; meshIdx < res.meshes.size(); ++meshIdx)
+  {
+    auto view = registry.view<Transform, MeshInstance, TextureInstance, DirtyTransform>();
+    for(auto e : view)
+    {
+      if(view.get<MeshInstance>(e).meshIndex != meshIdx)
+        continue;
+
+      const auto& t     = view.get<Transform>(e);
+      const auto& ti    = view.get<TextureInstance>(e);
+      instances[slot++] = { toMatrix(t), ti.textureIndex };
+    }
+  }
+
+  // NOTE: clear<> runs after the instance buffer is already written and submitted,
+  // so this is safe for single-pass uploads. If you ever defer writes across
+  // multiple in-flight frames, delay this clear until all frames-in-flight
+  // have consumed the buffer for this frameIndex.
+  registry.clear<DirtyTransform>();
 }
 
 void RenderLoop::submitCommandBuffer(entt::registry& registry)

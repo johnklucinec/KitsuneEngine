@@ -15,7 +15,6 @@ int main(int argc, char* argv[])
   // App config
   registry.ctx().emplace<AppState>();
   registry.ctx().emplace<Input>();
-  registry.ctx().emplace<Settings>();
   registry.ctx().emplace<Settings>(SettingsUtils::parseArgs(argc, argv));
 
   // Create Player

@@ -40,6 +40,7 @@ void System::render(entt::registry& registry)
 
     // ==== Update Shader Data ====
     RenderLoop::updateShaderData(registry);
+    RenderLoop::updateInstanceBuffer(registry);
 
     // ==== Record Command Buffer (also builds HUD) ====
     RenderLoop::recordCommandBuffer(registry);

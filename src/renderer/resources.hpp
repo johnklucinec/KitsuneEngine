@@ -48,8 +48,6 @@ struct MeshResource
   VmaAllocation allocation  = VK_NULL_HANDLE;
   VkDeviceSize  indexOffset = 0;
   uint32_t      indexCount  = 0;
-  uint32_t      instanceCount{};  // how many instances of this mesh
-  uint32_t      firstInstance{};  // starting offset into the instance SSBO
 };
 
 struct SceneResources
@@ -60,6 +58,8 @@ struct SceneResources
   std::vector<Texture>                               textures;
   std::vector<VkDescriptorImageInfo>                 textureDescriptors;
   Slang::ComPtr<slang::IGlobalSession>               slangSession;
+  std::unordered_map<std::string, uint32_t>          meshCache;
+  std::unordered_map<std::string, uint32_t>          textureCache;
 };
 
 namespace Renderer {
