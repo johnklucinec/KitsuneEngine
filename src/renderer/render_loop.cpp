@@ -5,6 +5,7 @@
 #include "core/app.hpp"
 
 #include "render_loop.hpp"
+#include "factories.hpp"
 #include "mesh.hpp"
 #include "renderer/context.hpp"
 #include "renderer/swapchain.hpp"
@@ -54,22 +55,9 @@ void RenderLoop::init(entt::registry& registry)
   Renderer::updateDescriptorSets(registry);
 
   // Create suzanne entities (bottom ones)
-  for(int i = 0; i < 3; ++i)
-  {
-    auto e = registry.create();
-    registry.emplace<Transform>(e, glm::vec3(i * 3.f - 3.f, 0.f, 0.f), glm::identity<glm::quat>(), glm::vec3{ 1.f });
-    registry.emplace<MeshInstance>(e, 0u);
-    registry.emplace<TextureInstance>(e, tex0);
-  }
-
-  // Create suzanne entities (top ones)
-  for(int i = 0; i < 2; ++i)
-  {
-    auto e = registry.create();
-    registry.emplace<Transform>(e, glm::vec3(i * 3.f - 1.5f, 3.f, 0.f), glm::identity<glm::quat>(), glm::vec3{ 1.f });
-    registry.emplace<MeshInstance>(e, 0u);
-    registry.emplace<TextureInstance>(e, tex1);
-  }
+  makeBot(registry, glm::vec3(0.f, 0.f, 0.f), suzanneMesh, tex0);
+  makeBot(registry, glm::vec3(0.f, 2.0f, 0.f), suzanneMesh, tex1);
+  makeBot(registry, glm::vec3(0.f, 4.f, 0.f), suzanneMesh, tex2);
 
   rc.playerEntity = registry.view<PlayerTag>().front();
   assert(rc.playerEntity != entt::null);

@@ -11,6 +11,7 @@
 
 #include "renderer/renderer.hpp"
 #include "renderer/render_loop.hpp"
+#include "target_behavior_system.hpp"
 
 void System::render(entt::registry& registry)
 {
@@ -37,6 +38,7 @@ void System::render(entt::registry& registry)
     System::input(registry);
     System::camera(registry);
     System::playerMovement(registry);
+    System::targetBehavior(registry);
 
     // ==== Update Shader Data ====
     RenderLoop::updateShaderData(registry);

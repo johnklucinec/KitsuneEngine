@@ -25,8 +25,8 @@ void System::playerMovement(entt::registry& reg)
     const float fwd    = (keyDown(input, Key::W) ? 1.0f : 0.0f) - (keyDown(input, Key::S) ? 1.0f : 0.0f);
     const bool  sprint = keyDown(input, Key::LShift);
 
-    glm::vec2   wish{ side, fwd };
-    const float len_sq = wish.x * wish.x + wish.y * wish.y;
+    glm::vec2   moveInput{ side, fwd };
+    const float len_sq = moveInput.x * moveInput.x + moveInput.y * moveInput.y;
 
     if(len_sq <= 0.0f)
     {
@@ -34,7 +34,7 @@ void System::playerMovement(entt::registry& reg)
       return;
     }
 
-    wish = glm::normalize(wish);
+    moveInput = glm::normalize(moveInput);
 
     // Directional speed penalties (Overwatch-style)
     const bool has_fwd  = fwd > PC_AXIS_EPS;
@@ -51,12 +51,12 @@ void System::playerMovement(entt::registry& reg)
     if(sprint && has_fwd)
       speed *= PC_SPRINT_MULT;
 
-    // Rotate local wish to world XZ via camera yaw
+    // Rotate local moveInput to world XZ via camera yaw
     const float cy = std::cos(static_cast<float>(cam.yaw_rad));
     const float sy = std::sin(static_cast<float>(cam.yaw_rad));
 
-    vel.linear.x = (wish.x * cy - wish.y * sy) * speed;
-    vel.linear.z = (wish.x * sy + wish.y * cy) * speed;
+    vel.linear.x = (moveInput.x * cy - moveInput.y * sy) * speed;
+    vel.linear.z = (moveInput.x * sy + moveInput.y * cy) * speed;
 
     // Integrate into world position
     // TODO: This should eventually be its own system: view<Transform, Velocity>.each → position += vel * dt
