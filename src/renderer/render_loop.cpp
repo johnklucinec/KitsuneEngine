@@ -20,33 +20,26 @@
 
 #include "hud_system.hpp"
 
-struct MeshDrawParams
-{
-  uint32_t instanceCount;
-  uint32_t firstInstance;
-};
-
 // TODO: Move this somewhere else or use the one in camera.
 inline glm::mat4 toMatrix(const Transform& t)
 {
-  return glm::translate(glm::mat4{ 1.f }, t.position) * glm::mat4_cast(t.rotation) * glm::scale(glm::mat4{ 1.f }, t.scale);
+  glm::mat4 translation = glm::translate(glm::mat4{ 1.0f }, t.position);
+  glm::mat4 rotation    = glm::mat4_cast(t.rotation);
+  glm::mat4 scale       = glm::scale(glm::mat4{ 1.0f }, t.scale);
+
+  return translation * rotation * scale;
 }
 
 namespace {
 struct RenderCache
 {
-  entt::entity                               playerEntity;
-  std::vector<InstanceData>                  staticInstances;
-  std::vector<std::pair<uint32_t, uint32_t>> staticMesh;
+  entt::entity playerEntity;
 };
 static RenderCache rc{};
 }  // namespace
 
 void RenderLoop::init(entt::registry& registry)
 {
-  auto& fs  = registry.ctx().get<FrameState>();
-  auto& res = registry.ctx().get<SceneResources>();
-
   // TODO: Textures and meshes should use MeshInstance and TextureInstance??
   int32_t suzanneMesh = Renderer::loadMesh("assets/models/suzanne.gltf", registry);
 
@@ -60,6 +53,7 @@ void RenderLoop::init(entt::registry& registry)
   // Call after loading textures
   Renderer::updateDescriptorSets(registry);
 
+  // Create suzanne entities (bottom ones)
   for(int i = 0; i < 3; ++i)
   {
     auto e = registry.create();
@@ -68,37 +62,13 @@ void RenderLoop::init(entt::registry& registry)
     registry.emplace<TextureInstance>(e, tex0);
   }
 
+  // Create suzanne entities (top ones)
   for(int i = 0; i < 2; ++i)
   {
     auto e = registry.create();
     registry.emplace<Transform>(e, glm::vec3(i * 3.f - 1.5f, 3.f, 0.f), glm::identity<glm::quat>(), glm::vec3{ 1.f });
     registry.emplace<MeshInstance>(e, 0u);
     registry.emplace<TextureInstance>(e, tex1);
-  }
-
-  // Separate static entities into rc.staticInstances once
-  {
-    uint32_t slot = 0;
-    for(uint32_t meshIdx = 0; meshIdx < res.meshes.size(); ++meshIdx)
-    {
-      // everything NOT dirty = static
-      auto     view  = registry.view<Transform, MeshInstance, TextureInstance>(entt::exclude<DirtyTransform>);
-      uint32_t count = 0;
-
-      for(auto e : view)
-      {
-        if(view.get<MeshInstance>(e).meshIndex != meshIdx)
-          continue;
-
-        const auto& t  = view.get<Transform>(e);
-        const auto& ti = view.get<TextureInstance>(e);
-        rc.staticInstances.push_back({ toMatrix(t), ti.textureIndex });
-        ++count;
-      }
-
-      rc.staticMesh.push_back({ slot, count });
-      slot += count;
-    }
   }
 
   rc.playerEntity = registry.view<PlayerTag>().front();
@@ -301,32 +271,23 @@ void RenderLoop::updateInstanceBuffer(entt::registry& registry)
   auto& fs  = registry.ctx().get<FrameState>();
   auto& res = registry.ctx().get<SceneResources>();
 
-  auto* instances = static_cast<InstanceData*>(res.instanceBuffers[fs.frameIndex].allocationInfo.pMappedData);
+  auto* instances  = static_cast<InstanceData*>(res.instanceBuffers[fs.frameIndex].allocationInfo.pMappedData);
+  auto  entityView = registry.view<Transform, MeshInstance, TextureInstance>();
 
-  // 1. Copy cached static instances
-  std::memcpy(instances, rc.staticInstances.data(), rc.staticInstances.size() * sizeof(InstanceData));
-
-  // 2. Recompute only dirty (dynamic) entities
-  uint32_t slot = static_cast<uint32_t>(rc.staticInstances.size());
+  uint32_t writeSlot = 0;
   for(uint32_t meshIdx = 0; meshIdx < res.meshes.size(); ++meshIdx)
   {
-    auto view = registry.view<Transform, MeshInstance, TextureInstance, DirtyTransform>();
-    for(auto e : view)
+    for(auto entity : entityView)
     {
-      if(view.get<MeshInstance>(e).meshIndex != meshIdx)
+      if(entityView.get<MeshInstance>(entity).meshIndex != meshIdx)
         continue;
 
-      const auto& t     = view.get<Transform>(e);
-      const auto& ti    = view.get<TextureInstance>(e);
-      instances[slot++] = { toMatrix(t), ti.textureIndex };
+      const auto& transform       = entityView.get<Transform>(entity);
+      const auto& textureInstance = entityView.get<TextureInstance>(entity);
+
+      instances[writeSlot++] = { toMatrix(transform), textureInstance.textureIndex };
     }
   }
-
-  // NOTE: clear<> runs after the instance buffer is already written and submitted,
-  // so this is safe for single-pass uploads. If you ever defer writes across
-  // multiple in-flight frames, delay this clear until all frames-in-flight
-  // have consumed the buffer for this frameIndex.
-  registry.clear<DirtyTransform>();
 }
 
 void RenderLoop::submitCommandBuffer(entt::registry& registry)
