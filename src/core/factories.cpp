@@ -7,14 +7,14 @@
 #include <entt/entity/registry.hpp>
 #include <random>
 
-#include "camera.hpp"
-#include "mesh.hpp"
-#include "player_movement.hpp"
+#include "components/camera.hpp"
+#include "components/mesh.hpp"
+#include "components/player_movement.hpp"
+#include "components/target_movement.hpp"
+#include "components/transform.hpp"
+#include "components/velocity.hpp"
+#include "components/tags.hpp"
 #include "core/settings.hpp"
-#include "target_movement.hpp"
-#include "transform.hpp"
-#include "velocity.hpp"
-#include "tags.hpp"
 
 entt::entity makePlayer(entt::registry& registry, glm::vec3 spawnPos)
 {

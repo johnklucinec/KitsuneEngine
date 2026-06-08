@@ -1,5 +1,5 @@
 #pragma once
-#include "settings.hpp"
+#include "core/settings.hpp"
 
 namespace SettingsUtils {
 

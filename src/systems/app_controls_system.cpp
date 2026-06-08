@@ -2,7 +2,7 @@
 #include "app_controls_system.hpp"
 
 #include "renderer/swapchain.hpp"
-#include "input.hpp"
+#include "components/input.hpp"
 #include "core/settings.hpp"
 #include "core/app.hpp"
 

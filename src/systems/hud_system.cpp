@@ -1,7 +1,7 @@
 #include <entt/entity/registry.hpp>
 
 #include "hud_system.hpp"
-#include "hud.hpp"
+#include "components/hud.hpp"
 
 #include <volk/volk.h>
 #include <imgui.h>
@@ -14,7 +14,7 @@
 #include "renderer/pipeline.hpp"
 #include "renderer/frame.hpp"
 
-#include "window.hpp"
+#include "components/window.hpp"
 #include "core/settings.hpp"
 
 namespace System {

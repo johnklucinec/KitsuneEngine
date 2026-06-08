@@ -13,7 +13,7 @@
 #include "renderer/resources.hpp"
 #include "renderer/pipeline.hpp"
 #include "renderer/renderer.hpp"
-#include "window.hpp"
+#include "components/window.hpp"
 
 #include <SDL3/SDL.h>
 namespace Renderer {
@@ -32,6 +32,8 @@ void init(entt::registry& registry)
   SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, "0");  // ignore OS accel
 
   auto& window = registry.ctx().emplace<WindowContext>("KitsuneEngine", SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+  if (!window.window)
+      SDL_Log("Window creation failed: %s", SDL_GetError());
   assert(window.window != nullptr);
   SDL_SetWindowRelativeMouseMode(window, true);  // enable raw input
 

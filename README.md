@@ -62,13 +62,13 @@ KitsuneEngine.exe -fps_max 480 -reduce_buffering -fullscreen -sensitivity 2.70
 ### Debug
 
 ```bash
-cmake -B build/debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
-cmake --build build/debug && build\debug\bin\KitsuneEngine.exe
+cmake -B build/debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+cmake --build build/debug && build\debug\KitsuneEngine.exe
 ```
 
 ### Release
 
 ```bash
-cmake -B build/release -G Ninja -DCMAKE_BUILD_TYPE=Release -DSTATIC_BUILD=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
-cmake --build build/release && build\release\bin\KitsuneEngine.exe
+cmake -B build/debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+cmake --build build/debug && build\debug\KitsuneEngine.exe
 ```

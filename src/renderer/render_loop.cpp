@@ -5,21 +5,21 @@
 #include "core/app.hpp"
 
 #include "render_loop.hpp"
-#include "factories.hpp"
-#include "mesh.hpp"
+#include "core/factories.hpp"
+#include "components/mesh.hpp"
 #include "renderer/context.hpp"
 #include "renderer/swapchain.hpp"
 #include "renderer/frame.hpp"
 #include "renderer/resources.hpp"
 #include "renderer/pipeline.hpp"
 
-#include "window.hpp"
-#include "transform.hpp"
-#include "camera.hpp"
-#include "tags.hpp"
+#include "components/window.hpp"
+#include "components/transform.hpp"
+#include "components/camera.hpp"
+#include "components/tags.hpp"
 #include "types.hpp"
 
-#include "hud_system.hpp"
+#include "systems/hud_system.hpp"
 
 // TODO: Move this somewhere else or use the one in camera.
 inline glm::mat4 toMatrix(const Transform& t)

@@ -1,6 +1,6 @@
 #pragma once
-#include "camera.hpp"
-#include "transform.hpp"
+#include "components/camera.hpp"
+#include "components/transform.hpp"
 #include <glm/glm.hpp>
 
 namespace CamUtils {

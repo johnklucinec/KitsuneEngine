@@ -1,11 +1,11 @@
 #include <entt/entity/registry.hpp>
 
-#include "input.hpp"
+#include "components/input.hpp"
 #include "core/settings.hpp"
 #include "core/app.hpp"
 #include "core/factories.hpp"
 
-#include "render_system.hpp"
+#include "systems/render_system.hpp"
 #include "utils/settings_utils.hpp"
 
 int main(int argc, char* argv[])

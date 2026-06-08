@@ -1,10 +1,8 @@
 #include "camera_system.hpp"
-#include "camera.hpp"
-#include "input.hpp"
-#include "transform.hpp"
-#include "tags.hpp"
+#include "components/input.hpp"
+#include "components/tags.hpp"
 #include "utils/cam_utils.hpp"
-#include "window.hpp"
+#include "components/window.hpp"
 
 #include <glm/gtc/quaternion.hpp>
 #include <algorithm>

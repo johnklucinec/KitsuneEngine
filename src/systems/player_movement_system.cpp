@@ -1,11 +1,11 @@
 #include <entt/entity/registry.hpp>
-#include "camera.hpp"
-#include "input.hpp"
-#include "player_movement.hpp"
-#include "transform.hpp"
-#include "velocity.hpp"
-#include "frame_pacer.hpp"
-#include "player_movement_system.hpp"
+#include "components/camera.hpp"
+#include "components/input.hpp"
+#include "components/player_movement.hpp"
+#include "components/transform.hpp"
+#include "components/velocity.hpp"
+#include "components/frame_pacer.hpp"
+#include "systems/player_movement_system.hpp"
 
 #include <glm/glm.hpp>
 #include <cmath>

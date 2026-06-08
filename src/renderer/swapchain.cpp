@@ -2,7 +2,7 @@
 #include "common.hpp"
 #include "renderer/context.hpp"
 #include "renderer/resources.hpp"
-#include "window.hpp"
+#include "components/window.hpp"
 #include "core/settings.hpp"
 #include <cassert>
 #include <entt/entity/registry.hpp>

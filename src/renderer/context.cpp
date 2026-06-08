@@ -5,7 +5,7 @@
 #include <vector>
 #include <iostream>
 #include "common.hpp"
-#include "window.hpp"
+#include "components/window.hpp"
 #include <SDL3/SDL_mouse.h>
 #include <entt/entity/registry.hpp>
 

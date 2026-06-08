@@ -1,7 +1,6 @@
 #include <entt/entity/registry.hpp>
 #include "core/settings.hpp"
 #include "utils/frame_pacer_utils.hpp"
-#include "frame_pacer.hpp"
 #include "frame_pacer_system.hpp"
 
 #pragma comment(lib, "winmm.lib")

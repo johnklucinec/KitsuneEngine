@@ -1,9 +1,9 @@
 #include <entt/entity/registry.hpp>
-#include "target_movement.hpp"
-#include "transform.hpp"
-#include "velocity.hpp"
-#include "frame_pacer.hpp"
-#include "target_behavior_system.hpp"
+#include "components/target_movement.hpp"
+#include "components/transform.hpp"
+#include "components/velocity.hpp"
+#include "components/frame_pacer.hpp"
+#include "systems/target_behavior_system.hpp"
 
 #include <glm/glm.hpp>
 

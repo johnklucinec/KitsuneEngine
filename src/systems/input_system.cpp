@@ -3,7 +3,7 @@
 #include <SDL3/SDL.h>
 
 #include "input_system.hpp"
-#include "input.hpp"
+#include "components/input.hpp"
 
 namespace {
 

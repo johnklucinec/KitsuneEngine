@@ -1,5 +1,5 @@
 #pragma once
-#include "frame_pacer.hpp"
+#include "components/frame_pacer.hpp"
 
 namespace PacerUtils {
 
